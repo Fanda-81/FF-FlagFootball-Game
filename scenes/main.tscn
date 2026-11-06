@@ -1,0 +1,14 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="PackedScene" path="res://scenes/stadium.tscn" id="2_stadium"]
+[ext_resource type="Script" path="res://scripts/game_camera.gd" id="3_camera"]
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1_main")
+
+[node name="Stadium" parent="." instance=ExtResource("2_stadium")]
+
+[node name="Camera" type="Camera3D" parent="."]
+current = true
+script = ExtResource("3_camera")

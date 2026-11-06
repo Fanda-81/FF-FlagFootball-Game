@@ -1,0 +1,10 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/main.tscn" id="1_main"]
+[ext_resource type="Script" path="res://tools/closeup.gd" id="2_view"]
+
+[node name="Closeup" type="Node3D"]
+script = ExtResource("2_view")
+mode = "close"
+
+[node name="Main" parent="." instance=ExtResource("1_main")]
