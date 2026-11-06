@@ -1,14 +1,14 @@
-# Netlify 配置
+# Netlify 閰嶇疆
 #
-# 这个仓库里已经带着导出好的 Godot Web 构建（build/web），
-# 所以"构建"只是占位，真正的产物在 publish 目录里。
-
+# 杩欎釜浠撳簱閲屽凡缁忓甫鐫€瀵煎嚭濂界殑 Godot Web 鏋勫缓锛坆uild/web锛夛紝
+# 鎵€浠?鏋勫缓"鍙槸鍗犱綅锛岀湡姝ｇ殑浜х墿鍦?publish 鐩綍閲屻€?
 [build]
+  # 显式声明仓库根目录，避免 Netlify 站点设置里的 Base directory 影响路径解析
+  base = ""
   command = "echo 'static Godot export, nothing to build'"
   publish = "build/web"
 
-# 大文件缓存（首次下载后浏览器复用）
-[[headers]]
+# 澶ф枃浠剁紦瀛橈紙棣栨涓嬭浇鍚庢祻瑙堝櫒澶嶇敤锛?[[headers]]
   for = "/index.wasm"
   [headers.values]
     Cache-Control = "public, max-age=604800"
