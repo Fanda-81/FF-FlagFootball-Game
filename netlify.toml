@@ -1,9 +1,10 @@
-# Netlify 配置：仓库里已经带着导出好的静态文件，不需要构建命令。
+# Netlify 配置
 #
-# 关键点：publish 指向已提交到仓库的 build/web。
-# 之前部署失败就是因为 .gitignore 排除了 build/ 和 *.pck，这个目录根本不在仓库里。
+# 这个仓库里已经带着导出好的 Godot Web 构建（build/web），
+# 所以"构建"只是占位，真正的产物在 publish 目录里。
 
 [build]
+  command = "echo 'static Godot export, nothing to build'"
   publish = "build/web"
 
 # 大文件缓存（首次下载后浏览器复用）

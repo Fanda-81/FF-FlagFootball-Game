@@ -1,13 +1,13 @@
-# Godot 缓存与本地数据
+# Godot 缓存
 .godot/
 *.translation
 
-# Web 导出必须提交：Netlify 直接发布 build/web，不需要构建命令
+# Web 导出必须提交：Netlify 直接发布 build/web
 build/*
 !build/web/
 !build/web/**
+build/web/*.import
 
-# 本地临时产物
 _shots/
 *.exe
 *.zip
