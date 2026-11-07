@@ -273,6 +273,85 @@ func _build_hdr_sky() -> void:
 	# 天空绕 Y 转一点，让太阳落在球场侧后方
 	_environment.sky_rotation = Vector3(deg_to_rad(-7.0), deg_to_rad(120.0), 0.0)
 
+
+# =============================================================================
+# 外围大地面 + 左右各两块训练场（没有人）
+# =============================================================================
+
+const SIDE_FIELD_X := 62.0
+const GROUND_SIZE := 620.0
+
+
+func _build_surrounding_fields() -> void:
+	# 1) 一张超大的草地，把"天空"挡在地平线以外
+	var ground := MeshInstance3D.new()
+	ground.name = "OuterGround"
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(GROUND_SIZE, GROUND_SIZE)
+	ground.mesh = plane
+	var grass := StandardMaterial3D.new()
+	grass.albedo_color = Color("123a24")
+	grass.roughness = 1.0
+	ground.material_override = grass
+	ground.position = Vector3(0.0, -0.04, 25.0)
+	add_child(ground)
+
+	# 2) 左右各两块空球场（只有地面和线，没有球员看台）
+	for side in [-1.0, 1.0]:
+		for offset in [-1.0, 1.0]:
+			_build_empty_field(Vector3(side * SIDE_FIELD_X, 0.0, 25.0 + offset * 78.0))
+
+
+func _build_empty_field(center: Vector3) -> void:
+	var root := Node3D.new()
+	root.name = "EmptyField"
+	root.position = center
+	add_child(root)
+
+	var turf := MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(30.0, 74.0)
+	turf.mesh = plane
+	var grass := StandardMaterial3D.new()
+	grass.albedo_color = Color("1f7a45")
+	grass.roughness = 0.95
+	turf.material_override = grass
+	turf.position = Vector3(0.0, 0.0, 0.0)
+	root.add_child(turf)
+
+	# 端区（蓝色）
+	for zone_z in [-33.0, 33.0]:
+		var zone := MeshInstance3D.new()
+		var zone_plane := PlaneMesh.new()
+		zone_plane.size = Vector2(30.0, 8.0)
+		zone.mesh = zone_plane
+		var blue := StandardMaterial3D.new()
+		blue.albedo_color = Color("25406e")
+		zone.material_override = blue
+		zone.position = Vector3(0.0, 0.01, zone_z)
+		root.add_child(zone)
+
+	# 白线：边线 + 每 5 码一条
+	var white := StandardMaterial3D.new()
+	white.albedo_color = Color("e8eef7")
+	white.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	for x in [-15.0, 15.0]:
+		var line := MeshInstance3D.new()
+		var box := BoxMesh.new()
+		box.size = Vector3(0.18, 0.02, 74.0)
+		line.mesh = box
+		line.material_override = white
+		line.position = Vector3(x, 0.02, 0.0)
+		root.add_child(line)
+	for i in range(-6, 7):
+		var line := MeshInstance3D.new()
+		var box := BoxMesh.new()
+		box.size = Vector3(30.0, 0.02, 0.14)
+		line.mesh = box
+		line.material_override = white
+		line.position = Vector3(0.0, 0.02, float(i) * 5.0)
+		root.add_child(line)
+
 func _build_environment() -> void:
 	var world_environment := WorldEnvironment.new()
 	var environment := Environment.new()
@@ -285,6 +364,7 @@ func _build_environment() -> void:
 	world_environment.environment = environment
 	add_child(world_environment)
 
+	_build_surrounding_fields()
 	_build_sky_dome()
 
 	var sun := DirectionalLight3D.new()
