@@ -73,7 +73,8 @@ const OFFENSE_COLOR := Color("2f7cf6")
 const DEFENSE_COLOR := Color("e2543f")
 const MARGIN := 28.0
 ## 战术侧边栏（一行显示）
-const PLAY_ROW_WIDTH := 640.0
+const PLAY_ROW_WIDTH := 330.0
+const PLAY_ROW_HEIGHT := 132.0
 const PLAY_BUTTON_WIDTH := 100.0
 const TOP_BUTTON_WIDTH := 168.0
 const TOP_BUTTON_HEIGHT := 92.0
@@ -242,6 +243,7 @@ func _ready() -> void:
 	_begin_series(START_LOS, 1)
 	_build_debug_panel()
 	_build_joystick()
+	_build_debug_tab()
 
 
 
@@ -464,6 +466,27 @@ func _build_empty_field(center: Vector3) -> void:
 # =============================================================================
 
 ## 左下角移动摇杆（比赛进行中显示）
+## 左上角小面板开关（隐藏调试信息）
+func _toggle_debug_panel() -> void:
+	if _debug_label != null:
+		_debug_label.visible = not _debug_label.visible
+
+
+func _build_debug_tab() -> void:
+	var tab := _make_button("状态", 100.0, 56.0, 20)
+	tab.name = "DebugTab"
+	tab.anchor_left = 0.0
+	tab.anchor_top = 0.0
+	tab.anchor_right = 0.0
+	tab.anchor_bottom = 0.0
+	tab.offset_left = MARGIN
+	tab.offset_right = MARGIN + 100.0
+	tab.offset_top = MARGIN + 122.0
+	tab.offset_bottom = MARGIN + 178.0
+	tab.pressed.connect(_toggle_debug_panel)
+	add_child(tab)
+
+
 func _build_joystick() -> void:
 	var layer := CanvasLayer.new()
 	layer.name = "JoystickLayer"
@@ -1556,14 +1579,15 @@ func _build_hud() -> void:
 	_play_tab.gui_input.connect(_on_play_tab_input)
 	root.add_child(_play_tab)
 
-	_play_grid = HBoxContainer.new()
+	_play_grid = GridContainer.new()
+	_play_grid.columns = 3
 	_play_grid.name = "PlayDrawer"
 	_play_grid.anchor_bottom = 1.0
 	_play_grid.anchor_top = 1.0
-	_play_grid.offset_left = -700.0
-	_play_grid.offset_right = -700.0 + PLAY_ROW_WIDTH
-	_play_grid.offset_top = -MARGIN - 108.0 - 40.0 - 80.0
-	_play_grid.offset_bottom = -MARGIN - 108.0 - 40.0
+	_play_grid.offset_left = -PLAY_ROW_WIDTH
+	_play_grid.offset_right = 0.0
+	_play_grid.offset_top = -MARGIN - 108.0 - 40.0 - 96.0
+	_play_grid.offset_bottom = -MARGIN - 108.0 - 40.0 - 96.0 + PLAY_ROW_HEIGHT
 	_play_grid.add_theme_constant_override("separation", 8)
 	root.add_child(_play_grid)
 
@@ -2668,7 +2692,7 @@ func _slide_menu(target_y: float) -> void:
 ## 左下战术板：右拉展开 / 左滑收起
 func _toggle_play_drawer() -> void:
 	_play_open = not _play_open
-	_slide_play(60.0 if _play_open else -PLAY_ROW_WIDTH)
+	_slide_play(130.0 if _play_open else -PLAY_ROW_WIDTH)
 
 
 func _slide_play(target_x: float) -> void:
@@ -2690,7 +2714,7 @@ func debug_open_menu() -> void:
 
 func debug_open_play_drawer() -> void:
 	_play_open = true
-	_slide_play(60.0)
+	_slide_play(130.0)
 
 
 ## 把当前战术的路线画在球场上（开球后清除）

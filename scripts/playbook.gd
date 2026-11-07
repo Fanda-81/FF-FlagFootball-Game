@@ -38,22 +38,8 @@ const PLAYS := [
 		},
 		"routes": {"X": "curl", "Y": "curl", "Z": "curl", "C": "in"},
 	},
-	{
-		"id": "flood", "name": "洪泛", "hint": "一深两浅，拉开防守",
-		"formation": {
-			"QB": {"x": -1.0, "dz": -2.2}, "C": {"x": 0.0, "dz": 0.0},
-			"X": {"x": -11.0, "dz": 0.2}, "Y": {"x": 3.0, "dz": 0.3}, "Z": {"x": 8.5, "dz": -0.6},
-		},
-		"routes": {"X": "go", "Y": "out", "Z": "drag", "C": "short_out"},
-	},
-	{
-		"id": "screen", "name": "屏风", "hint": "快速外切，球到人到",
-		"formation": {
-			"QB": {"x": 0.0, "dz": -2.4}, "C": {"x": 0.0, "dz": 0.0},
-			"X": {"x": -6.5, "dz": 0.5}, "Y": {"x": 5.5, "dz": 0.5}, "Z": {"x": 10.0, "dz": 0.0},
-		},
-		"routes": {"X": "short_out", "Y": "short_out", "Z": "corner", "C": "short_out"},
-	},
+
+
 	{
 		"id": "inside_run", "name": "中路跑球", "hint": "交球给跑锋，中路突破", "kind": "run",
 		"formation": {
