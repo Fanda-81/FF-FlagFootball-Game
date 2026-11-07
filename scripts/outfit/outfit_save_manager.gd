@@ -60,6 +60,40 @@ static func load_into(manager: OutfitManager) -> bool:
 	return true
 
 
+## 把每名球员的穿搭整体写进同一个存档（players 节点）
+static func save_players(players: Dictionary) -> bool:
+	var payload := {"version": FORMAT_VERSION, "players": players}
+	if has_save():
+		var existing := FileAccess.open(SAVE_PATH, FileAccess.READ)
+		if existing != null:
+			var parsed: Variant = JSON.parse_string(existing.get_as_text())
+			existing.close()
+			if typeof(parsed) == TYPE_DICTIONARY:
+				payload = parsed
+				payload["version"] = FORMAT_VERSION
+				payload["players"] = players
+	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if file == null:
+		return false
+	file.store_string(JSON.stringify(payload, "\t"))
+	file.close()
+	return true
+
+
+static func load_players() -> Dictionary:
+	if not has_save():
+		return {}
+	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	if file == null:
+		return {}
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
+	if typeof(parsed) != TYPE_DICTIONARY:
+		return {}
+	var players: Variant = (parsed as Dictionary).get("players", {})
+	return players if typeof(players) == TYPE_DICTIONARY else {}
+
+
 static func delete_save() -> bool:
 	if not has_save():
 		return false

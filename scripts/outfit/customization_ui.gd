@@ -55,6 +55,7 @@ var _player_row: HBoxContainer
 func _ready() -> void:
 	_build_preview()
 	_build_layout()
+	_per_player = OutfitSaveManager.load_players()
 	_build_squad_bar()
 	_select_side("offense")
 	_select_category("shirt")
@@ -660,6 +661,8 @@ func _on_next_surface() -> void:
 
 
 func _on_save() -> void:
+	_per_player[_active_slot] = _manager.state()
+	OutfitSaveManager.save_players(_per_player)
 	if OutfitSaveManager.save(_manager):
 		_status_label.text = "已保存到 %s" % OutfitSaveManager.save_path()
 	else:

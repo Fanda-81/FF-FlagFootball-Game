@@ -92,6 +92,8 @@ const TD_STOP_Z := 56.0
 ## 接球手跑完路线后的自由跑状态：{mode, dir, timer, flip}
 var _free_state: Dictionary = {}
 var _chasing: Array[PlayerActor] = []
+## 防守方抄截后转为持球方回攻
+var _defense_possession := false
 var _td_celebrating := false
 var _td_timer := 0.0
 var _play_buttons: Dictionary = {}
@@ -342,6 +344,7 @@ func _begin_series(los: float, down: int) -> void:
 	_build_routes()
 	_reset_free_state()
 	_chasing.clear()
+	_defense_possession = false
 	_td_celebrating = false
 	_td_timer = 0.0
 
@@ -638,9 +641,8 @@ func _resolve_pass() -> bool:
 			0.0, 0.9)
 		if randf() < pick_chance:
 			# 抄截：这一档直接结束。
-			_ball.call("begin_physics", Vector3(0.0, 2.0, 0.0))
-			_pending_result = "被抄截 · %d/%d" % [_completions, _attempts]
-			_end_down(_los_z, "被抄截")
+			# 抄截成功：防守球员持球回攻
+			_begin_interception(defender)
 			return true
 
 	if receiver != null and receiver_distance <= receiver_radius:
@@ -691,6 +693,89 @@ func _begin_run_after_catch(receiver: PlayerActor) -> void:
 		_chasing.append(ranked[i] as PlayerActor)
 	_show_toast("接球成功 · 继续跑向达阵区", Color("a6f7bb"))
 
+
+
+# =============================================================================
+# 抄截回攻（防守方持球，进攻方追人拔旗）
+# =============================================================================
+
+func _begin_interception(defender: PlayerActor) -> void:
+	_defense_possession = true
+	_carrier = defender
+	_chasing.clear()
+	_reset_free_state()
+	# 距离最近的进攻球员去追
+	var ranked: Array = _receivers.duplicate()
+	if _qb != null:
+		ranked.append(_qb)
+	ranked.sort_custom(func(a, b):
+		return _flat_distance(a.global_position, defender.global_position) < _flat_distance(b.global_position, defender.global_position))
+	for i in mini(2, ranked.size()):
+		_chasing.append(ranked[i] as PlayerActor)
+	_ball.call("begin_physics", Vector3(0.0, 2.0, 0.0))
+	_attach_ball(defender)
+	_set_holder(defender)
+	_phase = Phase.RUN
+	_result_timer = 0.0
+	_clock_running = false
+	_show_toast("抄截！防守方回攻", Color("ffb27a"))
+
+
+func _advance_return(delta: float) -> void:
+	if _carrier == null:
+		return
+	# 往进攻方那一侧的端区跑（z 负方向）
+	var goal := Vector3(_carrier.global_position.x * 0.6, 0.0, -7.0)
+	var to_goal := goal - _carrier.global_position
+	to_goal.y = 0.0
+	if to_goal.length() > 0.4:
+		_carrier.set_move_input(to_goal.normalized())
+	else:
+		_carrier.set_move_input(Vector3.ZERO)
+
+	var closest := 999.0
+	for chaser in _chasing:
+		var to_carrier := _carrier.global_position - chaser.global_position
+		to_carrier.y = 0.0
+		if to_carrier.length() > 0.4:
+			chaser.set_move_input(to_carrier.normalized())
+		else:
+			chaser.set_move_input(Vector3.ZERO)
+		closest = minf(closest, to_carrier.length())
+	for other in _defenders:
+		if not _chasing.has(other):
+			other.set_move_input(Vector3.ZERO)
+	for receiver in _receivers:
+		if not _chasing.has(receiver):
+			receiver.set_move_input(Vector3.ZERO)
+	if _qb != null and not _chasing.has(_qb):
+		_qb.set_move_input(Vector3.ZERO)
+
+	_attach_ball(_carrier)
+
+	# 防守方达阵（进攻方那一侧端区）
+	if _carrier.global_position.z <= -5.0:
+		_touchdowns += 1
+		_show_touchdown()
+		_td_timer = TOUCHDOWN_SECONDS
+		_td_celebrating = true
+		_carrier.set_move_input(Vector3.ZERO)
+		return
+	if _td_celebrating:
+		_td_timer -= delta
+		if _td_timer <= 0.0:
+			_td_celebrating = false
+			_hide_touchdown()
+			_next_los = START_LOS
+			_next_down = 1
+			_turnover = false
+			_finish_reset()
+		return
+	if closest <= FLAG_PULL_RADIUS:
+		var mode := randi() % 3
+		_carrier.pull_flags(mode)
+		_show_toast("腰旗被拔掉（%s）" % ["左侧", "右侧", "两侧"][mode], Color("ffb27a"))
+		_end_down(clampf(_carrier.global_position.z, START_LOS, FIELD_MAX_Z - 2.0), "被拔旗")
 
 func _advance_run(delta: float) -> void:
 	if _carrier == null:
@@ -1234,7 +1319,7 @@ func _toggle_ball_focus() -> void:
 
 
 func _sync_ball_focus() -> void:
-	var flying := bool(_ball.get("manual_flight"))
+	var flying := bool(_ball.get("manual_flight")) or _phase == Phase.RUN
 	if _ball_focus and flying:
 		camera.set_chase_velocity(_ball.get("flight_velocity"))
 		if not camera.is_ball_focused():
@@ -1295,7 +1380,10 @@ func _physics_process(delta: float) -> void:
 				_physics_started = true
 				_start_bounce()
 		Phase.RUN:
-			_advance_run(delta)
+			if _defense_possession:
+				_advance_return(delta)
+			else:
+				_advance_run(delta)
 		Phase.RESULT:
 			_result_timer -= delta
 			if _result_label != null:
