@@ -59,6 +59,9 @@ const CATCH_HEIGHT_HIGH := 2.34
 const RECEIVER_SPEED := 6.4
 const DEFENDER_SPEED := 5.9
 const FLAG_PULL_RADIUS := 1.3
+## 躲旗：0.5 秒内拔旗判定半径缩到 25%（等效大幅降低被拔旗概率）
+const JUKE_SECONDS := 0.5
+const JUKE_RADIUS_MULT := 0.25
 const COVER_DEPTH := 1.6
 
 const RESULT_HOLD_SECONDS := 0.7
@@ -81,7 +84,7 @@ const FORMATION := {
 	"Z": {"x": 11.2, "dz": -0.8, "side": "offense", "speed": RECEIVER_SPEED},
 	"CB1": {"x": -9.4, "dz": 5.5, "side": "defense", "speed": DEFENDER_SPEED},
 	"CB2": {"x": 9.2, "dz": 5.5, "side": "defense", "speed": DEFENDER_SPEED},
-	"LB": {"x": 0.0, "dz": 7.2, "side": "defense", "speed": DEFENDER_SPEED},
+	"LB": {"x": 0.0, "dz": 7.8, "side": "defense", "speed": DEFENDER_SPEED},
 	"SS": {"x": -4.6, "dz": 11.0, "side": "defense", "speed": DEFENDER_SPEED},
 	"FS": {"x": 4.6, "dz": 13.0, "side": "defense", "speed": DEFENDER_SPEED},
 }
@@ -108,6 +111,7 @@ var _pending_swap := false
 var _handoff_done := false
 ## PLAY 阶段计时，用于跑球战术的交接球时机
 var _play_elapsed := 0.0
+var _juke_timer := 0.0
 ## Huddle 超时兜底（防止战术板没弹出导致卡死）
 var _huddle_timer := 0.0
 ## 列阵：目标位置 + 计时
@@ -129,7 +133,10 @@ var _play_grid: Control
 var _play_label: Label
 
 ## 人盯人：防守球员 → 负责的外接手。
-const COVERAGE := {"CB1": "X", "CB2": "Y", "LB": "C", "SS": "Z", "FS": "QB"}
+## LB 是冲传手（盯 QB），其余盯人/区域
+const COVERAGE := {"CB1": "X", "CB2": "Y", "SS": "Z", "FS": "C", "LB": "QB"}
+## 冲传手离启球线的最小距离（码）
+const RUSHER_MIN_DZ := 7.0
 
 # --- 状态 ---------------------------------------------------------------------
 var _actors: Dictionary = {}          # 位置名 -> PlayerActor
@@ -545,6 +552,9 @@ func _begin_series(los: float, down: int) -> void:
 		stadium.set_flipped(_swapped)
 	_pending_swap = false
 	_apply_possession()
+	_juke_timer = 0.0
+	if _snap_button != null:
+		_snap_button.text = "开球"
 	# 只在真实球场边界内钳位（-10 ~ 60），不得把端区内的真实位置挪走
 	_los_z = clampf(_game.field_yards_to_world(_game.line_of_scrimmage), FIELD_MIN_Z, FIELD_MAX_Z)
 	_down = _game.down_number
@@ -650,6 +660,10 @@ func _attach_ball(actor: PlayerActor) -> void:
 # =============================================================================
 
 func _on_snap_pressed() -> void:
+	# 比赛中点这个按钮 = 躲旗；只有准备阶段才是开球
+	if _phase == Phase.PLAY or _phase == Phase.FLIGHT or _phase == Phase.RUN:
+		_juke()
+		return
 	if _phase != Phase.PRE_SNAP:
 		return
 	_begin_snap()
@@ -673,6 +687,9 @@ func _begin_snap() -> void:
 		return
 	_handoff_done = false
 	_play_elapsed = 0.0
+	_juke_timer = 0.0
+	if _snap_button != null:
+		_snap_button.text = "躲旗"
 	_phase = Phase.SNAP
 	_snap_elapsed = 0.0
 	if _game != null:
@@ -1075,7 +1092,7 @@ func _advance_return(delta: float) -> void:
 			_turnover = false
 			_finish_reset()
 		return
-	if closest <= FLAG_PULL_RADIUS:
+	if closest <= _flag_radius():
 		var mode := randi() % 3
 		_carrier.pull_flags(mode)
 		_show_toast("腰旗被拔掉（%s）· 交换球权" % ["左侧", "右侧", "两侧"][mode], Color("ffb27a"))
@@ -1109,6 +1126,39 @@ func _advance_lineup(delta: float) -> void:
 			actor.set_move_input(Vector3.ZERO)
 		_phase = Phase.PRE_SNAP
 		_refresh_hud()
+
+## 当前有效拔旗半径（躲旗期间大幅缩小）
+func _flag_radius() -> float:
+	return FLAG_PULL_RADIUS * (JUKE_RADIUS_MULT if _juke_timer > 0.0 else 1.0)
+
+
+## 躲旗：0.5 秒窗口
+func _juke() -> void:
+	_juke_timer = JUKE_SECONDS
+	_show_toast("躲旗！", Color("ffd166"))
+
+
+## WASD 键盘移动：持球中控制 QB/持球人
+func _apply_keyboard_move() -> void:
+	if _phase != Phase.PLAY and _phase != Phase.RUN and _phase != Phase.FLIGHT:
+		return
+	var dir := Vector3.ZERO
+	if Input.is_key_pressed(KEY_A):
+		dir.x -= 1.0
+	if Input.is_key_pressed(KEY_D):
+		dir.x += 1.0
+	if Input.is_key_pressed(KEY_W):
+		dir.z += 1.0
+	if Input.is_key_pressed(KEY_S):
+		dir.z -= 1.0
+	if dir == Vector3.ZERO:
+		return
+	dir = dir.normalized()
+	if _carrier != null:
+		_carrier.set_move_input(dir)
+	elif _qb != null and not _dropback_active:
+		_qb.set_move_input(dir)
+
 
 func _advance_run(delta: float) -> void:
 	if _carrier == null:
@@ -1170,7 +1220,7 @@ func _advance_run(delta: float) -> void:
 			_turnover = false
 			_finish_reset()
 		return
-	if closest <= FLAG_PULL_RADIUS:
+	if closest <= _flag_radius():
 		# 随机拔掉左 / 右 / 两边的腰旗，拔掉的就隐藏
 		var mode := randi() % 3
 		_carrier.pull_flags(mode)
@@ -1742,6 +1792,9 @@ func _physics_process(delta: float) -> void:
 		_advance_lineup(delta)
 	_sync_debug_state()
 	_update_clock(delta)
+	if _juke_timer > 0.0:
+		_juke_timer = maxf(0.0, _juke_timer - delta)
+	_apply_keyboard_move()
 
 	match _phase:
 		Phase.PRE_SNAP:
