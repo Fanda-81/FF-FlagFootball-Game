@@ -730,7 +730,8 @@ func _advance_dropback(delta: float) -> void:
 	_qb.global_position = Vector3(
 		_qb_snap_origin.x,
 		0.0,
-		_qb_snap_origin.z - DROPBACK_YARDS * eased)
+		# 后撤方向必须跟着进攻方向：蓝方(+1)往 -Z 退，红方(-1)往 +Z 退
+		_qb_snap_origin.z - DROPBACK_YARDS * eased * float(_attack_dir))
 	if t >= 1.0:
 		_dropback_active = false
 		# 跑球战术：后撤步结束后自动交球给跑锋
