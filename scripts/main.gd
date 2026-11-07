@@ -104,6 +104,10 @@ var _swapped := false
 ## 进攻方向：+1 = 朝 +Z，-1 = 朝 -Z
 var _attack_dir := 1
 var _pending_swap := false
+## 跑球战术是否已经交球给跑锋
+var _handoff_done := false
+## PLAY 阶段计时，用于跑球战术的交接球时机
+var _play_elapsed := 0.0
 ## 列阵：目标位置 + 计时
 var _lineup_targets: Dictionary = {}
 var _lineup_timer := 0.0
@@ -659,6 +663,8 @@ func _begin_snap() -> void:
 		(_actors[slot] as PlayerActor).reset_flags()
 	if _game != null and _game.match_state != GameManager.State.READY_TO_SNAP:
 		return
+	_handoff_done = false
+	_play_elapsed = 0.0
 	_phase = Phase.SNAP
 	_snap_elapsed = 0.0
 	if _game != null:
@@ -688,6 +694,25 @@ func _advance_snap(delta: float) -> void:
 
 
 ## 四分卫后撤：从开球位置往回退 DROPBACK_YARDS，全程可出手。
+## 当前战术是否是跑球
+func _play_is_run() -> bool:
+	return String(Playbook.get_play(_current_play).get("kind", "pass")) == "run"
+
+
+## QB 把球交给跑锋（Y 槽位），随后由跑锋持球推进
+func _begin_handoff() -> void:
+	if _handoff_done:
+		return
+	var rb: PlayerActor = _actors.get("Y") as PlayerActor
+	if rb == null or _qb == null:
+		return
+	_handoff_done = true
+	_begin_run_after_catch(rb)
+	_show_toast("交球给跑锋", Color("9fd2ff"))
+	if _game != null:
+		_game.call("_log", "[PLAY %03d] HANDOFF TO RB AT %.1f" % [_game.get("play_id"), _game.get("ball_position_yards")])
+
+
 func _advance_dropback(delta: float) -> void:
 	if not _dropback_active:
 		return
@@ -700,6 +725,9 @@ func _advance_dropback(delta: float) -> void:
 		_qb_snap_origin.z - DROPBACK_YARDS * eased)
 	if t >= 1.0:
 		_dropback_active = false
+		# 跑球战术：后撤步结束后自动交球给跑锋
+		if _play_is_run() and not _handoff_done:
+			_begin_handoff()
 
 
 # =============================================================================
@@ -1707,6 +1735,10 @@ func _physics_process(delta: float) -> void:
 			_advance_snap(delta)
 		Phase.PLAY:
 			_advance_dropback(delta)
+			_play_elapsed += delta
+			# 跑球战术：开球后 0.7 秒交球给跑锋（与后撤步解耦，避免依赖内部标志）
+			if _play_is_run() and not _handoff_done and _play_elapsed >= 0.7:
+				_begin_handoff()
 			_advance_receivers()
 			_advance_coverage()
 			if not _aim_valid:

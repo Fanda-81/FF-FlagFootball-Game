@@ -54,6 +54,22 @@ const PLAYS := [
 		},
 		"routes": {"X": "short_out", "Y": "short_out", "Z": "corner", "C": "short_out"},
 	},
+	{
+		"id": "inside_run", "name": "中路跑球", "hint": "交球给跑锋，中路突破", "kind": "run",
+		"formation": {
+			"QB": {"x": 0.0, "dz": -2.2}, "C": {"x": 0.0, "dz": 0.0},
+			"X": {"x": -10.5, "dz": 0.3}, "Y": {"x": 0.6, "dz": -4.6}, "Z": {"x": 10.2, "dz": 0.2},
+		},
+		"routes": {"X": "go", "Y": "short_out", "Z": "out", "C": "short_out"},
+	},
+	{
+		"id": "outside_run", "name": "外侧跑球", "hint": "交球给跑锋，外线突破", "kind": "run",
+		"formation": {
+			"QB": {"x": 0.0, "dz": -2.2}, "C": {"x": 0.0, "dz": 0.0},
+			"X": {"x": -10.5, "dz": 0.3}, "Y": {"x": -0.6, "dz": -4.6}, "Z": {"x": 10.2, "dz": 0.2},
+		},
+		"routes": {"X": "go", "Y": "out", "Z": "go", "C": "short_out"},
+	},
 ]
 
 
