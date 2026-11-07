@@ -17,7 +17,7 @@ extends Control
 
 signal closed
 
-const CHARACTER := preload("res://assets/models/characters/FFfemale.glb")
+const CHARACTER := preload("res://assets/models/characters/morra.glb")
 const TARGET_HEIGHT := 1.82
 const MARGIN := 24.0
 
@@ -42,11 +42,21 @@ var _current_category := "shirt"
 
 var _dragging := false
 var _roster_panel: PanelContainer
+## 当前预览的阵营与球员
+var _side := "offense"
+var _active_slot := "QB"
+## 每个球员各自的穿搭快照（切换球员时保存/恢复）
+var _per_player: Dictionary = {}
+var _player_buttons: Dictionary = {}
+var _side_buttons: Dictionary = {}
+var _player_row: HBoxContainer
 
 
 func _ready() -> void:
 	_build_preview()
 	_build_layout()
+	_build_squad_bar()
+	_select_side("offense")
 	_select_category("shirt")
 
 
@@ -189,7 +199,7 @@ func _build_layout() -> void:
 
 	# --- 分类 ---
 	var category_row := HBoxContainer.new()
-	category_row.position = Vector2(MARGIN, 552.0)
+	category_row.position = Vector2(MARGIN, 690.0)
 	category_row.size = Vector2(720.0 - MARGIN * 2.0, 60.0)
 	category_row.add_theme_constant_override("separation", 8)
 	add_child(category_row)
@@ -204,7 +214,7 @@ func _build_layout() -> void:
 
 	# --- 服装列表 ---
 	var scroll := ScrollContainer.new()
-	var scroll_position := Vector2(MARGIN, 626.0)
+	var scroll_position := Vector2(MARGIN, 758.0)
 	scroll.position = scroll_position
 	scroll.size = Vector2(720.0 - MARGIN * 2.0, 150.0)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
@@ -218,7 +228,7 @@ func _build_layout() -> void:
 
 	# --- 颜色 ---
 	var color_panel := PanelContainer.new()
-	color_panel.position = Vector2(MARGIN, 790.0)
+	color_panel.position = Vector2(MARGIN, 892.0)
 	color_panel.size = Vector2(720.0 - MARGIN * 2.0, 160.0)
 	var panel_style := StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.09, 0.12, 0.17, 1.0)
@@ -418,6 +428,108 @@ func _make_button(text: String, size: int) -> Button:
 # 交互
 # =============================================================================
 
+
+# =============================================================================
+# 球队栏：进攻方 / 防守方 → 每个球员
+# =============================================================================
+
+const SIDE_SLOTS := {
+	"offense": ["QB", "C", "X", "Y", "Z"],
+	"defense": ["CB", "LB", "S"],
+}
+
+
+func _build_squad_bar() -> void:
+	var bar := PanelContainer.new()
+	bar.name = "SquadBar"
+	bar.position = Vector2(MARGIN, 552.0)
+	bar.size = Vector2(720.0 - MARGIN * 2.0, 132.0)
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.07, 0.10, 0.15, 0.96)
+	style.set_corner_radius_all(16)
+	style.set_border_width_all(2)
+	style.border_color = Color(0.26, 0.35, 0.48, 1.0)
+	style.set_content_margin_all(10)
+	bar.add_theme_stylebox_override("panel", style)
+	add_child(bar)
+
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 8)
+	bar.add_child(column)
+
+	var side_row := HBoxContainer.new()
+	side_row.add_theme_constant_override("separation", 10)
+	column.add_child(side_row)
+	for side in [["offense", "进攻方"], ["defense", "防守方"]]:
+		var button := _make_button(String(side[1]), 18)
+		button.custom_minimum_size = Vector2(150, 46)
+		button.pressed.connect(_select_side.bind(String(side[0])))
+		side_row.add_child(button)
+		_side_buttons[String(side[0])] = button
+
+	var note := _make_label("选球员 → 给他改装备/颜色", 15, Color("8fa6c4"))
+	side_row.add_child(note)
+
+	_player_row = HBoxContainer.new()
+	_player_row.add_theme_constant_override("separation", 6)
+	column.add_child(_player_row)
+
+
+func _select_side(side: String) -> void:
+	_side = side
+	for id in _side_buttons:
+		var button: Button = _side_buttons[id]
+		var active := String(id) == side
+		var style := (button.get_theme_stylebox("normal") as StyleBoxFlat).duplicate() as StyleBoxFlat
+		style.bg_color = Color(0.20, 0.34, 0.55, 1.0) if active else Color(0.13, 0.17, 0.24, 1.0)
+		style.border_color = Color(0.45, 0.66, 0.95, 1.0) if active else Color(0.26, 0.35, 0.48, 1.0)
+		button.add_theme_stylebox_override("normal", style)
+
+	for child in _player_row.get_children():
+		child.queue_free()
+	_player_buttons.clear()
+
+	var slots: Array = SIDE_SLOTS[side]
+	for slot in slots:
+		var button := _make_button("%s\n%s" % [String(slot), Roster.player_name(String(slot))], 15)
+		button.custom_minimum_size = Vector2(0, 54)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.pressed.connect(_select_slot.bind(String(slot)))
+		_player_row.add_child(button)
+		_player_buttons[String(slot)] = button
+
+	if slots.size() > 0:
+		_select_slot(String(slots[0]))
+
+
+func _select_slot(slot: String) -> void:
+	# 保存上一个球员的穿搭
+	if _active_slot != "":
+		_per_player[_active_slot] = _manager.state()
+	_active_slot = slot
+
+	for id in _player_buttons:
+		var button: Button = _player_buttons[id]
+		var active := String(id) == slot
+		var style: StyleBoxFlat = (button.get_theme_stylebox("normal") as StyleBoxFlat).duplicate() as StyleBoxFlat
+		style.border_color = Color(0.95, 0.85, 0.35, 1.0) if active else Color(0.26, 0.35, 0.48, 1.0)
+		style.set_border_width_all(3 if active else 2)
+		button.add_theme_stylebox_override("normal", style)
+
+	# 恢复该球员的穿搭
+	if _per_player.has(slot):
+		_manager.restore(_per_player[slot])
+	else:
+		_manager.reset_outfit()
+	# 队伍色覆盖主体
+	var team_color := Roster.team_color(_side)
+	for category in ["shirt", "pants", "socks"]:
+		var item_id := _manager.equipped_id(category)
+		if item_id != "":
+			_manager.set_item_color(category, item_id, 0, team_color)
+	_refresh_items()
+	_status_label.text = "当前预览：%s（%s）" % [Roster.player_name(slot), "进攻方" if _side == "offense" else "防守方"]
+
 func _select_category(category: String) -> void:
 	_current_category = category
 	_apply_focus(category)
@@ -444,6 +556,16 @@ func _refresh_items() -> void:
 		return
 
 	var equipped := _manager.equipped_id(_current_category)
+	var none_button := _make_button("不穿", 19)
+	none_button.custom_minimum_size = Vector2(110, 118)
+	none_button.pressed.connect(_select_item.bind(""))
+	if equipped == "":
+		var none_style := none_button.get_theme_stylebox("normal").duplicate() as StyleBoxFlat
+		none_style.border_color = Color(0.95, 0.85, 0.35, 1.0)
+		none_style.set_border_width_all(3)
+		none_button.add_theme_stylebox_override("normal", none_style)
+	_item_row.add_child(none_button)
+
 	for item in list:
 		var entry := item as OutfitItem
 		var button := _make_button(entry.display_name, 19)
@@ -473,7 +595,13 @@ func _refresh_items() -> void:
 
 
 func _select_item(item_id: String) -> void:
-	# 点一下 = 穿上它（同分类只能有一件）
+	# 点一下 = 穿上它（同分类只能有一件）；item_id 为空 = 脱下
+	if item_id == "":
+		_manager.unequip(_current_category)
+		_clear_selection_ui()
+		_refresh_items()
+		_status_label.text = "已脱下%s" % OutfitCatalog.category_label(_current_category)
+		return
 	_manager.equip(_current_category, item_id)
 	_editor.select(_current_category, item_id, 0)
 	_status_label.text = "已穿上：%s" % _manager.item_by_id(_current_category, item_id).display_name
@@ -503,6 +631,18 @@ func _clear_selection_ui() -> void:
 
 func _on_picker_changed(color: Color) -> void:
 	_editor.apply_color(color)
+	# 主体颜色（球衣/球裤/球袜）改一次全队生效，以最后改的颜色为准
+	if _current_category in ["shirt", "pants", "socks"]:
+		Roster.set_team_color(_side, color)
+		Roster.save()
+		for category in ["shirt", "pants", "socks"]:
+			var item_id := _manager.equipped_id(category)
+			if item_id != "":
+				_manager.set_item_color(category, item_id, 0, color)
+		_status_label.text = "%s主体颜色已统一更新" % ("进攻方" if _side == "offense" else "防守方")
+	else:
+		Roster.set_player_tint(_active_slot, color)
+		Roster.save()
 	_refresh_swatches()
 
 
