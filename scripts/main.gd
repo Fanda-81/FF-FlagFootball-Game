@@ -463,36 +463,10 @@ func debug_toggle_panel() -> void:
 
 ## 把真实状态镜像给规则引擎，并刷新面板
 func _sync_debug_state() -> void:
-	if _game == null:
+	if _game == null or _debug_label == null:
 		return
-	_game.offense = _offense_side
-	_game.attack_dir = float(_attack_dir)
-	_game.down = _down
-	_game.los_yards = _game.z_to_yards(_los_z, _game.attack_dir)
-	_game.ball_yards = _game.z_to_yards(_ball.global_position.z, _game.attack_dir)
-	_game.first_down_yards = _game.MIDFIELD_YARDS if _game.los_yards < _game.MIDFIELD_YARDS else _game.GOAL_YARDS
-	if _game.los_yards >= _game.MIDFIELD_YARDS:
-		_game.phase = 2
-	else:
-		_game.phase = 1
-	_game.blue_score = _score_blue
-	_game.red_score = _score_red
-	match _phase:
-		Phase.PRE_SNAP:
-			_game.state = GameManager.State.READY_TO_SNAP
-		Phase.SNAP, Phase.PLAY, Phase.LINEUP:
-			_game.state = GameManager.State.BALL_IN_PLAY
-		Phase.FLIGHT:
-			_game.state = GameManager.State.PASS_IN_AIR
-		Phase.RUN:
-			_game.state = GameManager.State.BALL_IN_PLAY
-		Phase.RESULT:
-			_game.state = GameManager.State.PLAY_DEAD
-		Phase.TOUCHDOWN:
-			_game.state = GameManager.State.TOUCHDOWN
-	if _debug_label != null and _debug_label.visible:
+	if _debug_label.visible:
 		_debug_label.text = _game.debug_lines()
-
 func _build_environment() -> void:
 	var world_environment := WorldEnvironment.new()
 	var environment := Environment.new()
@@ -555,22 +529,19 @@ func _spawn_teams() -> void:
 
 ## 把全队摆到新的启球线上，并清掉上一档的状态。
 func _begin_series(los: float, down: int) -> void:
-	if _pending_swap:
-		_pending_swap = false
-		_swapped = not _swapped
-		_attack_dir = -1 if _swapped else 1
-		_offense_side = "red" if _offense_side == "blue" else "blue"
-		if camera != null:
-			camera.set_flipped(_swapped)
-		if stadium != null:
-			stadium.set_flipped(_swapped)
+	# 规则引擎是唯一真相：球权/方向/启球线/档数全部由它决定
+	_offense_side = _game.possession_team
+	_attack_dir = int(_game.get_attacking_direction())
+	_swapped = _attack_dir < 0
+	if camera != null:
+		camera.set_flipped(_swapped)
+	if stadium != null:
+		stadium.set_flipped(_swapped)
+	_pending_swap = false
 	_apply_possession()
-	_los_z = clampf(los, START_LOS, FIELD_MAX_Z - 12.0)
-	# 攻防转换后，进攻方要从另一侧半场发起进攻
-	if _attack_dir < 0:
-		_los_z = FIELD_MIN_Z + FIELD_MAX_Z - _los_z
-	_down = down
-	_first_down_z = minf(_los_z + FIRST_DOWN_YARDS, FIELD_MAX_Z)
+	_los_z = clampf(_game.field_yards_to_world(_game.line_of_scrimmage), FIELD_MIN_Z + 2.0, FIELD_MAX_Z - 2.0)
+	_down = _game.down_number
+	_first_down_z = _game.field_yards_to_world(_game.first_down_line)
 	var play_formation: Dictionary = Playbook.get_play(_current_play).get("formation", {})
 	for slot in FORMATION:
 		var spec: Dictionary = FORMATION[slot]
@@ -626,9 +597,7 @@ func _begin_series(los: float, down: int) -> void:
 	_attach_ball(_center)
 	_series_count += 1
 	_lineup_timer = 2.5
-	_game.offense = _offense_side
-	_game.attack_dir = float(_attack_dir)
-	_game.begin_series(_game.z_to_yards(_los_z, _game.attack_dir), _down)
+	# 引擎在本档开始时已经持有启球线/档数，这里只需要同步它到世界坐标（已在上面做过）
 	_phase = Phase.PRE_SNAP if _series_count <= 1 else Phase.LINEUP
 	_refresh_route_preview()
 	_play_clock = PRE_SNAP_CLOCK
@@ -1054,10 +1023,7 @@ func _advance_return(delta: float) -> void:
 		var mode := randi() % 3
 		_carrier.pull_flags(mode)
 		_show_toast("腰旗被拔掉（%s）· 交换球权" % ["左侧", "右侧", "两侧"][mode], Color("ffb27a"))
-		_pending_swap = true
-		_next_los = clampf(absf(_carrier.global_position.z), 12.0, FIELD_MAX_Z - 12.0)
-		_next_down = 1
-		_turnover = false
+		_game.change_possession("INTERCEPTION_RETURN", _game.world_to_field_yards(_carrier.global_position.z))
 		_phase = Phase.RESULT
 		_result_timer = RESULT_HOLD_SECONDS
 		_defense_possession = false
@@ -1200,14 +1166,16 @@ func _end_down(spot: float, reason: String) -> void:
 		next_los = START_LOS
 		next_down = 1
 		turnover = true
-	# 交给规则引擎算下一档（4 档过中场 → 新 4 档；否则档数 +1；四档不过转球权）
-	if _game != null:
-		var verdict: Dictionary = _game.end_play(reason, spot)
-		next_los = _game.yards_to_z(float(verdict["los"]), _game.attack_dir)
-		next_down = int(verdict["down"])
-		if bool(verdict["turnover"]):
-			turnover = true
-			_pending_swap = true
+	# 统一交给规则引擎处理（事件类型决定行为）
+	var event := "FLAG_PULL"
+	if reason == "传球未完成":
+		event = "INCOMPLETE_PASS"
+	elif reason == "死球":
+		event = "OUT_OF_BOUNDS"
+	_game.end_play(event, _game.world_to_field_yards(spot))
+	next_los = _game.field_yards_to_world(_game.line_of_scrimmage)
+	next_down = _game.down_number
+	turnover = false
 	_next_los = next_los
 	_next_down = next_down
 	_turnover = turnover
