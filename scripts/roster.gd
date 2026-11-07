@@ -57,6 +57,12 @@ static func _load_from_disk() -> Dictionary:
 	return out
 
 
+## 清空缓存，下次读取会重新生成随机名单
+static func reset() -> void:
+	_loaded = false
+	_data = {}
+
+
 static func save() -> bool:
 	_ensure()
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)

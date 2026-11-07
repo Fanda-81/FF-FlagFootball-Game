@@ -91,6 +91,7 @@ const TD_ZONE_START := 50.0
 const TD_STOP_Z := 56.0
 ## 接球手跑完路线后的自由跑状态：{mode, dir, timer, flip}
 var _free_state: Dictionary = {}
+var _chasing: Array[PlayerActor] = []
 var _td_celebrating := false
 var _td_timer := 0.0
 var _play_buttons: Dictionary = {}
@@ -340,6 +341,7 @@ func _begin_series(los: float, down: int) -> void:
 
 	_build_routes()
 	_reset_free_state()
+	_chasing.clear()
 	_td_celebrating = false
 	_td_timer = 0.0
 
@@ -394,9 +396,8 @@ func _set_holder(actor: PlayerActor) -> void:
 func _attach_ball(actor: PlayerActor) -> void:
 	if actor == null:
 		return
-	# 球尖保持水平：只用角色朝向的偏航，不带俯仰
-	var flat := Basis(Vector3.UP, actor.global_rotation.y)
-	_ball.call("hold_at", _hand_position(actor), flat)
+	# 绑在右手，跟随角色朝向（不强制水平）
+	_ball.call("hold_at", _hand_position(actor), actor.global_transform.basis)
 
 
 # =============================================================================
@@ -673,12 +674,18 @@ func _begin_run_after_catch(receiver: PlayerActor) -> void:
 	_phase = Phase.RUN
 	_result_timer = 0.0
 	_clock_running = false
-	# 除了接球的人，其他人全部站住
+	# 除了接球的人，其他人站住；离接球人最近的两名防守球员继续追
 	_reset_free_state()
 	for player in _receivers:
 		player.set_move_input(Vector3.ZERO)
 	for defender in _defenders:
 		defender.set_move_input(Vector3.ZERO)
+	_chasing.clear()
+	var ranked: Array = _defenders.duplicate()
+	ranked.sort_custom(func(a, b):
+		return _flat_distance(a.global_position, receiver.global_position) < _flat_distance(b.global_position, receiver.global_position))
+	for i in mini(2, ranked.size()):
+		_chasing.append(ranked[i] as PlayerActor)
 	_show_toast("接球成功 · 继续跑向达阵区", Color("a6f7bb"))
 
 
@@ -696,7 +703,15 @@ func _advance_run(delta: float) -> void:
 
 	var closest := 999.0
 	for defender in _defenders:
-		defender.set_move_input(Vector3.ZERO)
+		if _chasing.has(defender):
+			var to_carrier := _carrier.global_position - defender.global_position
+			to_carrier.y = 0.0
+			if to_carrier.length() > 0.4:
+				defender.set_move_input(to_carrier.normalized())
+			else:
+				defender.set_move_input(Vector3.ZERO)
+		else:
+			defender.set_move_input(Vector3.ZERO)
 		closest = minf(closest, _flat_distance(defender.global_position, _carrier.global_position))
 
 	_attach_ball(_carrier)

@@ -284,6 +284,12 @@ func _build_layout() -> void:
 	roster_button.pressed.connect(_toggle_roster_panel)
 	bottom_row.add_child(roster_button)
 
+	var wipe_button := _make_button("清空存档", 20)
+	wipe_button.custom_minimum_size = Vector2(0, 74)
+	wipe_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wipe_button.pressed.connect(_on_wipe_save)
+	bottom_row.add_child(wipe_button)
+
 	var close_button := _make_button("退出", 22)
 	close_button.custom_minimum_size = Vector2(150, 74)
 	close_button.pressed.connect(_on_close)
@@ -531,6 +537,18 @@ func _toggle_roster_panel() -> void:
 	if _roster_panel == null:
 		_build_roster_panel()
 	_roster_panel.visible = not _roster_panel.visible
+
+
+## 清空穿搭与名单存档，回到出厂状态
+func _on_wipe_save() -> void:
+	OutfitSaveManager.delete_save()
+	var dir := DirAccess.open("user://")
+	if dir != null:
+		dir.remove("roster.json")
+	Roster.reset()
+	_manager.reset_outfit()
+	_refresh_items()
+	_status_label.text = "已清空存档（穿搭与名单都恢复默认）"
 
 
 func _on_close() -> void:
