@@ -220,6 +220,9 @@ func _ensure_material(mesh_name: String, surface: int) -> StandardMaterial3D:
 	if material.albedo_texture == null and base != null:
 		material.albedo_texture = _texture_of(base)
 
+	# 腰旗这类单面片在 Blender 里看不出问题，但 Godot 默认背面剔除会把它们藏起来，
+	# 所以统一改成双面渲染。
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	mesh.set_surface_override_material(surface, material)
 	_material_cache[key] = material
 	_original_colors[key] = material.albedo_color
