@@ -72,6 +72,9 @@ const TRAIL_STEP := 0.07
 const OFFENSE_COLOR := Color("2f7cf6")
 const DEFENSE_COLOR := Color("e2543f")
 const MARGIN := 28.0
+## 战术侧边栏（一行显示）
+const PLAY_ROW_WIDTH := 640.0
+const PLAY_BUTTON_WIDTH := 100.0
 const TOP_BUTTON_WIDTH := 168.0
 const TOP_BUTTON_HEIGHT := 92.0
 
@@ -1553,21 +1556,21 @@ func _build_hud() -> void:
 	_play_tab.gui_input.connect(_on_play_tab_input)
 	root.add_child(_play_tab)
 
-	_play_grid = VBoxContainer.new()
+	_play_grid = HBoxContainer.new()
 	_play_grid.name = "PlayDrawer"
 	_play_grid.anchor_bottom = 1.0
 	_play_grid.anchor_top = 1.0
-	_play_grid.offset_left = -220.0
-	_play_grid.offset_right = 0.0
-	_play_grid.offset_top = -MARGIN - 108.0 - 40.0 - 390.0
+	_play_grid.offset_left = -700.0
+	_play_grid.offset_right = -700.0 + PLAY_ROW_WIDTH
+	_play_grid.offset_top = -MARGIN - 108.0 - 40.0 - 80.0
 	_play_grid.offset_bottom = -MARGIN - 108.0 - 40.0
 	_play_grid.add_theme_constant_override("separation", 8)
 	root.add_child(_play_grid)
 
 	_play_buttons.clear()
 	for play in Playbook.PLAYS:
-		var play_button := _make_button(String(play["name"]), 210.0, 58.0, 22)
-		play_button.custom_minimum_size = Vector2(210, 58)
+		var play_button := _make_button(String(play["name"]), PLAY_BUTTON_WIDTH, 56.0, 17)
+		play_button.custom_minimum_size = Vector2(PLAY_BUTTON_WIDTH, 56.0)
 		play_button.pressed.connect(_select_play.bind(String(play["id"])))
 		_play_grid.add_child(play_button)
 		_play_buttons[String(play["id"])] = play_button
@@ -2665,7 +2668,7 @@ func _slide_menu(target_y: float) -> void:
 ## 左下战术板：右拉展开 / 左滑收起
 func _toggle_play_drawer() -> void:
 	_play_open = not _play_open
-	_slide_play(110.0 if _play_open else -220.0)
+	_slide_play(60.0 if _play_open else -PLAY_ROW_WIDTH)
 
 
 func _slide_play(target_x: float) -> void:
@@ -2674,6 +2677,7 @@ func _slide_play(target_x: float) -> void:
 	var tween := create_tween()
 	tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	tween.tween_property(_play_grid, "offset_left", target_x, 0.22)
+	tween.parallel().tween_property(_play_grid, "offset_right", target_x + PLAY_ROW_WIDTH, 0.22)
 	tween.parallel().tween_property(_play_grid, "offset_right", target_x + 220.0, 0.22)
 	if _play_tab != null:
 		_play_tab.text = "战术板 ◀" if _play_open else "战术板 ▶"
@@ -2686,7 +2690,7 @@ func debug_open_menu() -> void:
 
 func debug_open_play_drawer() -> void:
 	_play_open = true
-	_slide_play(110.0)
+	_slide_play(60.0)
 
 
 ## 把当前战术的路线画在球场上（开球后清除）
