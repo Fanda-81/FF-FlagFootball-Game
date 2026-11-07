@@ -79,10 +79,11 @@ const FORMATION := {
 	"X": {"x": -9.2, "dz": 0.3, "side": "offense", "speed": RECEIVER_SPEED},
 	"Y": {"x": 7.8, "dz": 0.3, "side": "offense", "speed": RECEIVER_SPEED},
 	"Z": {"x": 11.2, "dz": -0.8, "side": "offense", "speed": RECEIVER_SPEED},
-	"CB": {"x": -9.4, "dz": 5.5, "side": "defense", "speed": DEFENDER_SPEED},
-	"LB": {"x": 5.8, "dz": 5.2, "side": "defense", "speed": DEFENDER_SPEED},
-	"S": {"x": 2.4, "dz": 11.0, "side": "defense", "speed": DEFENDER_SPEED},
-	"R": {"x": -4.6, "dz": 8.6, "side": "defense", "speed": DEFENDER_SPEED},
+	"CB1": {"x": -9.4, "dz": 5.5, "side": "defense", "speed": DEFENDER_SPEED},
+	"CB2": {"x": 9.2, "dz": 5.5, "side": "defense", "speed": DEFENDER_SPEED},
+	"LB": {"x": 0.0, "dz": 7.2, "side": "defense", "speed": DEFENDER_SPEED},
+	"SS": {"x": -4.6, "dz": 11.0, "side": "defense", "speed": DEFENDER_SPEED},
+	"FS": {"x": 4.6, "dz": 13.0, "side": "defense", "speed": DEFENDER_SPEED},
 }
 
 ## 当前战术（6 套战术在 scripts/playbook.gd）
@@ -110,7 +111,7 @@ var _play_grid: Control
 var _play_label: Label
 
 ## 人盯人：防守球员 → 负责的外接手。
-const COVERAGE := {"CB": "X", "LB": "Y", "S": "Z", "R": "C"}
+const COVERAGE := {"CB1": "X", "CB2": "Y", "LB": "C", "SS": "Z", "FS": "QB"}
 
 # --- 状态 ---------------------------------------------------------------------
 var _actors: Dictionary = {}          # 位置名 -> PlayerActor
@@ -309,7 +310,10 @@ func _spawn_teams() -> void:
 		actor.max_speed = float(spec["speed"])
 		actor.personal_outfit = offense
 		# 名单里的名字和主色
-		actor.actor_name = Roster.player_name(slot)
+		# 目前只有女球员模型，直接标位置，不用随机名字
+		var label_map := {"QB": "QB", "C": "C", "X": "X", "Y": "Y", "Z": "Z",
+			"CB1": "CB", "CB2": "CB", "LB": "LB", "SS": "S", "FS": "S"}
+		actor.actor_name = "女" + String(label_map.get(slot, slot))
 		actor.rotation.y = 0.0 if offense else PI
 		add_child(actor)
 		_actors[slot] = actor

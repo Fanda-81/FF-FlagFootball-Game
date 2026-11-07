@@ -150,7 +150,8 @@ func _mesh_plane(size: Vector2, position: Vector3, material: Material) -> MeshIn
 func set_flipped(value: bool) -> void:
 	for label in _text_labels:
 		if label != null and is_instance_valid(label):
-			label.scale.x = -1.0 if value else 1.0
+			# 相机绕视线滚 180° 是双轴翻转，文字也要双轴镜像才正
+			label.scale = Vector3(-1.0, -1.0, 1.0) if value else Vector3.ONE
 
 
 func _build_field() -> void:
