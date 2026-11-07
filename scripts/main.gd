@@ -115,6 +115,9 @@ var _score_blue := 0
 var _score_red := 0
 var _score_label: Label
 var _score_boards: Array = []
+## 规则引擎（阶段一：镜像真实状态供调试面板读取）
+var _game: GameManager
+var _debug_label: Label
 var _play_buttons: Dictionary = {}
 var _play_grid: Control
 var _play_label: Label
@@ -206,6 +209,8 @@ var _trail_points: Array[Vector3] = []
 
 
 func _ready() -> void:
+	_game = GameManager.new()
+	_game.start_match()
 	_build_environment()
 	_spawn_teams()
 	_spawn_ball()
@@ -213,6 +218,7 @@ func _ready() -> void:
 	_build_trail()
 	_build_hud()
 	_begin_series(START_LOS, 1)
+	_build_debug_panel()
 
 
 
@@ -428,6 +434,64 @@ func _build_empty_field(center: Vector3) -> void:
 		line.material_override = white
 		line.position = Vector3(0.0, 0.02, float(i) * 5.0)
 		root.add_child(line)
+
+
+# =============================================================================
+# 开发者调试面板
+# =============================================================================
+
+func _build_debug_panel() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "DebugLayer"
+	layer.layer = 20
+	add_child(layer)
+	_debug_label = Label.new()
+	_debug_label.name = "DebugPanel"
+	_debug_label.text = ""
+	_debug_label.add_theme_font_size_override("font_size", 15)
+	_debug_label.add_theme_color_override("font_color", Color("9df58f"))
+	_debug_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	_debug_label.add_theme_constant_override("outline_size", 6)
+	_debug_label.position = Vector2(24.0, 300.0)
+	layer.add_child(_debug_label)
+
+
+func debug_toggle_panel() -> void:
+	if _debug_label != null:
+		_debug_label.visible = not _debug_label.visible
+
+
+## 把真实状态镜像给规则引擎，并刷新面板
+func _sync_debug_state() -> void:
+	if _game == null:
+		return
+	_game.offense = _offense_side
+	_game.attack_dir = float(_attack_dir)
+	_game.down = _down
+	_game.los_yards = _game.z_to_yards(_los_z, _game.attack_dir)
+	_game.ball_yards = _game.z_to_yards(_ball.global_position.z, _game.attack_dir)
+	_game.first_down_yards = _game.MIDFIELD_YARDS if _game.los_yards < _game.MIDFIELD_YARDS else _game.GOAL_YARDS
+	if _game.los_yards >= _game.MIDFIELD_YARDS:
+		_game.phase = 2
+	else:
+		_game.phase = 1
+	_game.blue_score = _score_blue
+	_game.red_score = _score_red
+	match _phase:
+		Phase.PRE_SNAP:
+			_game.state = GameManager.State.READY_TO_SNAP
+		Phase.SNAP, Phase.PLAY, Phase.LINEUP:
+			_game.state = GameManager.State.BALL_IN_PLAY
+		Phase.FLIGHT:
+			_game.state = GameManager.State.PASS_IN_AIR
+		Phase.RUN:
+			_game.state = GameManager.State.BALL_IN_PLAY
+		Phase.RESULT:
+			_game.state = GameManager.State.PLAY_DEAD
+		Phase.TOUCHDOWN:
+			_game.state = GameManager.State.TOUCHDOWN
+	if _debug_label != null and _debug_label.visible:
+		_debug_label.text = _game.debug_lines()
 
 func _build_environment() -> void:
 	var world_environment := WorldEnvironment.new()
@@ -1611,6 +1675,7 @@ func _show_toast(text: String, color: Color) -> void:
 # =============================================================================
 
 func _physics_process(delta: float) -> void:
+	_sync_debug_state()
 	_update_clock(delta)
 
 	match _phase:
