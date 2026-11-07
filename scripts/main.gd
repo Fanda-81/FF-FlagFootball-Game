@@ -114,8 +114,7 @@ var _td_timer := 0.0
 var _score_blue := 0
 var _score_red := 0
 var _score_label: Label
-var _score_board_left: Label3D
-var _score_board_right: Label3D
+var _score_boards: Array = []
 var _play_buttons: Dictionary = {}
 var _play_grid: Control
 var _play_label: Label
@@ -307,35 +306,39 @@ const GROUND_SIZE := 620.0
 # =============================================================================
 
 func _build_scoreboard() -> void:
-	var board := MeshInstance3D.new()
-	board.name = "Scoreboard"
-	var box := BoxMesh.new()
-	box.size = Vector3(9.0, 3.2, 0.35)
-	board.mesh = box
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color("11151d")
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	board.material_override = mat
-	board.position = Vector3(-19.5, 5.0, 25.0)
-	add_child(board)
+	# 两侧观众席各安装一块，牌面平行于看台、朝向球场
+	for side in [-1.0, 1.0]:
+		var board := MeshInstance3D.new()
+		board.name = "Scoreboard"
+		var box := BoxMesh.new()
+		box.size = Vector3(0.35, 3.2, 9.0)
+		board.mesh = box
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color("11151d")
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		board.material_override = mat
+		board.position = Vector3(side * 21.0, 5.2, 25.0)
+		add_child(board)
 
-	_score_board_left = Label3D.new()
-	_score_board_left.text = "蓝 0"
-	_score_board_left.font_size = 96
-	_score_board_left.pixel_size = 0.012
-	_score_board_left.modulate = Color("5aa9ff")
-	_score_board_left.position = Vector3(-19.4, 5.2, 22.6)
-	_score_board_left.rotation.y = PI * 0.5
-	add_child(_score_board_left)
+		var left := Label3D.new()
+		left.text = "蓝 0"
+		left.font_size = 96
+		left.pixel_size = 0.012
+		left.modulate = Color("5aa9ff")
+		left.position = Vector3(side * 20.9, 5.4, 22.6)
+		left.rotation.y = side * PI * 0.5
+		add_child(left)
 
-	_score_board_right = Label3D.new()
-	_score_board_right.text = "红 0"
-	_score_board_right.font_size = 96
-	_score_board_right.pixel_size = 0.012
-	_score_board_right.modulate = Color("ff6b5e")
-	_score_board_right.position = Vector3(-19.4, 5.2, 27.4)
-	_score_board_right.rotation.y = PI * 0.5
-	add_child(_score_board_right)
+		var right := Label3D.new()
+		right.text = "红 0"
+		right.font_size = 96
+		right.pixel_size = 0.012
+		right.modulate = Color("ff6b5e")
+		right.position = Vector3(side * 20.9, 5.4, 27.4)
+		right.rotation.y = side * PI * 0.5
+		add_child(right)
+
+		_score_boards.append([left, right])
 
 
 func _add_score(team: String) -> void:
@@ -349,10 +352,11 @@ func _add_score(team: String) -> void:
 func _refresh_score() -> void:
 	if _score_label != null:
 		_score_label.text = "蓝 %d : %d 红" % [_score_blue, _score_red]
-	if _score_board_left != null:
-		_score_board_left.text = "蓝 %d" % _score_blue
-	if _score_board_right != null:
-		_score_board_right.text = "红 %d" % _score_red
+	for pair in _score_boards:
+		var labels: Array = pair
+		if labels.size() >= 2:
+			(labels[0] as Label3D).text = "蓝 %d" % _score_blue
+			(labels[1] as Label3D).text = "红 %d" % _score_red
 
 func _build_surrounding_fields() -> void:
 	# 1) 一张超大的草地，把"天空"挡在地平线以外
@@ -369,8 +373,8 @@ func _build_surrounding_fields() -> void:
 	add_child(ground)
 
 	# 2) 主场上方、下方各一块空球场，和主场排成一列
-	_build_empty_field(Vector3(0.0, 0.0, 25.0 + 74.0))
-	_build_empty_field(Vector3(0.0, 0.0, 25.0 - 74.0))
+	# 观众视角往远端看能看到第二座球场（和主场一样大，没有球员）
+	_build_empty_field(Vector3(58.0, 0.0, 25.0))
 
 
 func _build_empty_field(center: Vector3) -> void:
@@ -950,9 +954,13 @@ func _advance_return(delta: float) -> void:
 	_attach_ball(_carrier)
 
 	# 防守方达阵（进攻方那一侧端区）
-	if _carrier.global_position.z * _attack_dir <= -5.0:
+	if not _td_celebrating and _carrier.global_position.z * _attack_dir <= -5.0:
 		_touchdowns += 1
-		_add_score("blue" if _offense_side == "red" else "red")
+		# 防守方（非当前进攻方）得分
+		var scorer := "blue" if _offense_side == "red" else "red"
+		_add_score(scorer)
+		if scorer == _offense_side:
+			_pending_swap = true
 		_show_touchdown()
 		_td_timer = TOUCHDOWN_SECONDS
 		_td_celebrating = true
@@ -966,8 +974,6 @@ func _advance_return(delta: float) -> void:
 			_next_los = START_LOS
 			_next_down = 1
 			_turnover = false
-			# 达阵后换球权，攻防继续轮换
-			_pending_swap = true
 			_finish_reset()
 		return
 	if closest <= FLAG_PULL_RADIUS:
@@ -1041,6 +1047,7 @@ func _advance_run(delta: float) -> void:
 		_td_timer = TOUCHDOWN_SECONDS
 		_touchdowns += 1
 		_add_score(_offense_side)
+		_pending_swap = true
 		_clock_running = false
 		_show_touchdown()
 		for player in _receivers:
