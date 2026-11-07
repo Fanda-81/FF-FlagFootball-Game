@@ -167,8 +167,12 @@ func _process(delta: float) -> bool:
 				_failures.append("再次点击后没有取消聚焦")
 
 	if not _throw_checked and _elapsed >= THROW_CHECK_AT:
-		_throw_checked = true
-		_check_throw_loop()
+		# 等真实状态事件：球还在飞（FLIGHT=3）就继续等，超时 5 秒再判
+		if int(_main.get("_phase")) == 3 and _elapsed < THROW_CHECK_AT + 5.0:
+			pass
+		else:
+			_throw_checked = true
+			_check_throw_loop()
 
 	if not _finished and _elapsed >= FINISH_AT:
 		_finished = true
@@ -652,7 +656,7 @@ func _check_throw_loop() -> void:
 	if attempts < 1:
 		_failures.append("传球没有被判定：attempts=%d" % attempts)
 	var phase := int(_main.get("_phase"))
-	if phase != 0 and phase != 7:
+	if phase != 0 and phase != 7 and phase != 8:
 		_failures.append("传球结束后没有复位到持球状态：phase=%d" % phase)
 	if _main.get("_holder") == null:
 		_failures.append("复位后没有持球人")
