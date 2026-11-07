@@ -104,6 +104,27 @@ func _material(color: Color, emission := Color.TRANSPARENT) -> StandardMaterial3
 	return material
 
 
+
+## 草地材质：在纯色上叠一层噪点，模拟草皮颗粒
+func _grass_material(color: Color) -> StandardMaterial3D:
+	var material := _material(color)
+	var noise := FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	noise.frequency = 0.42
+	noise.fractal_octaves = 4
+	var texture := NoiseTexture2D.new()
+	texture.noise = noise
+	texture.width = 512
+	texture.height = 512
+	texture.seamless = true
+	var ramp := Gradient.new()
+	ramp.colors = PackedColorArray([Color(0.80, 0.80, 0.80), Color(1.14, 1.14, 1.14)])
+	texture.color_ramp = ramp
+	material.albedo_texture = texture
+	material.uv1_scale = Vector3(7.0, 7.0, 1.0)
+	material.roughness = 0.95
+	return material
+
 func _texture_material(path: String, fallback: Color, uv_scale := Vector3.ONE, transparent := false, unshaded := false) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
 	material.albedo_color = fallback
@@ -163,6 +184,10 @@ func set_flipped(value: bool) -> void:
 			var b: Label3D = digits[1]
 			a.position = digits[3] if value else digits[2]
 			b.position = digits[2] if value else digits[3]
+			# 双保险：文字也跟着换
+			if digits.size() >= 6:
+				a.text = String(digits[5]) if value else String(digits[4])
+				b.text = String(digits[4]) if value else String(digits[5])
 
 
 func _build_field() -> void:
@@ -180,7 +205,7 @@ func _build_field() -> void:
 	# 原版贴图自带的密集条纹已经去掉，所以不会再出现比 5 码更细的纹理。
 	var band_colors: Array[Color] = [BAND_GREEN_A, BAND_GREEN_B]
 	for i in range(10):
-		var band_material := _material(band_colors[i % 2])
+		var band_material := _grass_material(band_colors[i % 2])
 		_mesh_box(Vector3(FIELD_WIDTH, 0.012, 5.0), Vector3(0, 0.0, 2.5 + i * 5.0), band_material)
 
 	var white := _material(Color("f7f7ef"))
@@ -234,7 +259,8 @@ func _build_field() -> void:
 				if _current_digits.size() == 2:
 					_digit_pairs.append([
 						_current_digits[0], _current_digits[1],
-						(_current_digits[0] as Label3D).position, (_current_digits[1] as Label3D).position])
+						(_current_digits[0] as Label3D).position, (_current_digits[1] as Label3D).position,
+						(_current_digits[0] as Label3D).text, (_current_digits[1] as Label3D).text])
 					for d in _current_digits:
 						_text_labels.append(d)
 

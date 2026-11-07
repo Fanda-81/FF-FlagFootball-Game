@@ -62,7 +62,7 @@ const FLAG_PULL_RADIUS := 1.3
 const COVER_DEPTH := 1.6
 
 const RESULT_HOLD_SECONDS := 1.6
-const TOUCHDOWN_SECONDS := 2.0
+const TOUCHDOWN_SECONDS := 3.0
 const TRAIL_MAX := 40
 const TRAIL_STEP := 0.07
 
@@ -502,6 +502,9 @@ func _begin_series(los: float, down: int) -> void:
 			stadium.set_flipped(_swapped)
 	_apply_possession()
 	_los_z = clampf(los, START_LOS, FIELD_MAX_Z - 12.0)
+	# 攻防转换后，进攻方要从另一侧半场发起进攻
+	if _attack_dir < 0:
+		_los_z = FIELD_MIN_Z + FIELD_MAX_Z - _los_z
 	_down = down
 	_first_down_z = minf(_los_z + FIRST_DOWN_YARDS, FIELD_MAX_Z)
 	var play_formation: Dictionary = Playbook.get_play(_current_play).get("formation", {})
@@ -1360,7 +1363,7 @@ func _build_touchdown_overlay(root: Control) -> void:
 	_confetti.emitting = false
 	_confetti.one_shot = true
 	_confetti.amount = 220
-	_confetti.lifetime = 2.0
+	_confetti.lifetime = 3.2
 	_confetti.explosiveness = 0.95
 	_confetti.direction = Vector2(0.0, -1.0)
 	_confetti.spread = 180.0
