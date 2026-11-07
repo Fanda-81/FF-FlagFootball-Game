@@ -98,6 +98,11 @@ const CENTER_DELAY := 0.7
 var _chasing: Array[PlayerActor] = []
 ## 防守方抄截后转为持球方回攻
 var _defense_possession := false
+## 攻防是否互换（回攻被拔旗后换防）
+var _swapped := false
+## 进攻方向：+1 = 朝 +Z，-1 = 朝 -Z
+var _attack_dir := 1
+var _pending_swap := false
 var _td_celebrating := false
 var _td_timer := 0.0
 var _play_buttons: Dictionary = {}
@@ -320,6 +325,10 @@ func _spawn_teams() -> void:
 
 ## 把全队摆到新的启球线上，并清掉上一档的状态。
 func _begin_series(los: float, down: int) -> void:
+	if _pending_swap:
+		_pending_swap = false
+		_swapped = not _swapped
+		_attack_dir = -1 if _swapped else 1
 	_los_z = clampf(los, START_LOS, FIELD_MAX_Z - 12.0)
 	_down = down
 	_first_down_z = minf(_los_z + FIRST_DOWN_YARDS, FIELD_MAX_Z)
@@ -334,7 +343,7 @@ func _begin_series(los: float, down: int) -> void:
 			spot_x = float(custom["x"])
 			spot_dz = float(custom["dz"])
 		spot_x = clampf(spot_x, FIELD_MIN_X + 1.0, FIELD_MAX_X - 1.0)
-		actor.global_position = Vector3(spot_x, 0.0, _los_z + spot_dz)
+		actor.global_position = Vector3(spot_x * _attack_dir, 0.0, _los_z + spot_dz * _attack_dir)
 		actor.velocity = Vector3.ZERO
 		actor.set_move_input(Vector3.ZERO)
 		actor.rotation.y = 0.0 if String(spec["side"]) == "offense" else PI
@@ -733,7 +742,7 @@ func _advance_return(delta: float) -> void:
 		return
 	_clamp_defenders()
 	# 往进攻方那一侧的端区跑（z 负方向）
-	var goal := Vector3(_carrier.global_position.x * 0.6, 0.0, -7.0)
+	var goal := Vector3(_carrier.global_position.x * 0.6, 0.0, -7.0 * _attack_dir)
 	var to_goal := goal - _carrier.global_position
 	to_goal.y = 0.0
 	if to_goal.length() > 0.4:
@@ -764,7 +773,7 @@ func _advance_return(delta: float) -> void:
 	_attach_ball(_carrier)
 
 	# 防守方达阵（进攻方那一侧端区）
-	if _carrier.global_position.z <= -5.0:
+	if _carrier.global_position.z * _attack_dir <= -5.0:
 		_touchdowns += 1
 		_show_touchdown()
 		_td_timer = TOUCHDOWN_SECONDS
@@ -784,14 +793,20 @@ func _advance_return(delta: float) -> void:
 	if closest <= FLAG_PULL_RADIUS:
 		var mode := randi() % 3
 		_carrier.pull_flags(mode)
-		_show_toast("腰旗被拔掉（%s）" % ["左侧", "右侧", "两侧"][mode], Color("ffb27a"))
-		_end_down(clampf(_carrier.global_position.z, START_LOS, FIELD_MAX_Z - 2.0), "被拔旗")
+		_show_toast("腰旗被拔掉（%s）· 交换球权" % ["左侧", "右侧", "两侧"][mode], Color("ffb27a"))
+		_pending_swap = true
+		_next_los = clampf(absf(_carrier.global_position.z), 12.0, FIELD_MAX_Z - 12.0)
+		_next_down = 1
+		_turnover = false
+		_phase = Phase.RESULT
+		_result_timer = RESULT_HOLD_SECONDS
+		_defense_possession = false
 
 func _advance_run(delta: float) -> void:
 	if _carrier == null:
 		return
 	# 接球人朝达阵区跑；防守全力追。
-	var goal := Vector3(_carrier.global_position.x * 0.6, 0.0, TOUCHDOWN_Z + 2.0)
+	var goal := Vector3(_carrier.global_position.x * 0.6, 0.0, (TOUCHDOWN_Z + 2.0) * _attack_dir)
 	var to_goal := goal - _carrier.global_position
 	to_goal.y = 0.0
 	if to_goal.length() > 0.4:
@@ -816,7 +831,7 @@ func _advance_run(delta: float) -> void:
 	_attach_ball(_carrier)
 
 	# 进入端区立刻放庆祝动画，但人继续往端区里跑
-	if not _td_celebrating and _carrier.global_position.z >= TD_ZONE_START:
+	if not _td_celebrating and _carrier.global_position.z * _attack_dir >= TD_ZONE_START:
 		_td_celebrating = true
 		_td_timer = TOUCHDOWN_SECONDS
 		_touchdowns += 1
@@ -828,7 +843,7 @@ func _advance_run(delta: float) -> void:
 			defender.set_move_input(Vector3.ZERO)
 	if _td_celebrating:
 		_td_timer -= delta
-		if _carrier.global_position.z >= TD_STOP_Z:
+		if _carrier.global_position.z * _attack_dir >= TD_STOP_Z:
 			_carrier.set_move_input(Vector3.ZERO)
 		if _td_timer <= 0.0:
 			_td_celebrating = false
@@ -1961,13 +1976,13 @@ func _build_routes() -> void:
 			# 战术里没写中锋路线时，给一条简单的短出线
 			if slot == "C":
 				var start_c: Vector3 = receiver.global_position
-				_routes[receiver] = [start_c + Vector3(0.0, 0.0, 2.0), start_c + Vector3(1.2, 0.0, 4.0)]
+				_routes[receiver] = [start_c + Vector3(0.0, 0.0, 2.0 * _attack_dir), start_c + Vector3(1.2 * _attack_dir, 0.0, 4.0 * _attack_dir)]
 				_route_index[receiver] = 0
 			continue
 		var start := receiver.global_position
 		var points: Array = []
 		for offset in route_table[slot]:
-			var point: Vector3 = start + offset
+			var point: Vector3 = start + Vector3(offset.x * _attack_dir, offset.y, offset.z * _attack_dir)
 			point.x = clampf(point.x, FIELD_MIN_X + 0.6, FIELD_MAX_X - 0.6)
 			point.z = clampf(point.z, FIELD_MIN_Z + 0.8, FIELD_MAX_Z - 0.8)
 			points.append(point)
