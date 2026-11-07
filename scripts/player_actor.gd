@@ -72,6 +72,10 @@ func _ready() -> void:
 	_build_collision()
 	_build_visual()
 	_refresh_active_visuals()
+	# 等站姿动画稳定后再量一次脚的高度
+	for i in 10:
+		await get_tree().process_frame
+	_ground_align()
 
 
 # =============================================================================
@@ -373,6 +377,27 @@ func _build_standing_idle(skeleton: Skeleton3D, prefix: String) -> Animation:
 					pose = rest * Quaternion(Vector3(0, 1, 0), deg_to_rad(wave * 2.5))
 			animation.track_insert_key(track, time, pose)
 	return animation
+
+
+
+## 把角色整体下移，让最低的脚趾骨刚好在地面上。
+## 不同模型/动画的绑定高度不一样，固定偏移会悬空，所以运行时量一次。
+func _ground_align() -> void:
+	if _character == null:
+		return
+	var skeleton := _find_skeleton(_character)
+	if skeleton == null:
+		return
+	var lowest := INF
+	for bone_name in ["mixamorig_LeftToeBase", "mixamorig_RightToeBase", "mixamorig_LeftFoot", "mixamorig_RightFoot"]:
+		var index := skeleton.find_bone(bone_name)
+		if index < 0:
+			continue
+		var world: Vector3 = skeleton.global_transform * skeleton.get_bone_global_pose(index).origin
+		lowest = minf(lowest, world.y)
+	if lowest == INF or absf(lowest) < 0.02:
+		return
+	_character.position.y -= lowest
 
 func _model_bounds(root: Node) -> AABB:
 	var result := AABB()
