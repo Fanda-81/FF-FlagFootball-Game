@@ -268,6 +268,9 @@ func restore(data: Dictionary) -> void:
 
 	for category in _catalog:
 		var item_id := String(equipped.get(category, ""))
+		# 存档里没有的新分类（比如后加的腰旗/球袜）自动用默认件，否则会一直不显示
+		if item_id == "" and not items(category).is_empty():
+			item_id = (items(category)[0] as OutfitItem).id
 		equip(category, item_id)
 
 

@@ -273,7 +273,6 @@ func _build_environment() -> void:
 	add_child(world_environment)
 
 	_build_sky_dome()
-	_build_clouds()
 
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-52, -30, 0)
@@ -333,7 +332,10 @@ func _begin_series(los: float, down: int) -> void:
 		actor.set_move_input(Vector3.ZERO)
 		actor.rotation.y = 0.0 if String(spec["side"]) == "offense" else PI
 		actor.set_active(false)
-		actor.apply_roster_tint(Roster.player_tint(slot))
+		var side := String(FORMATION[slot]["side"])
+		actor.apply_colors(
+			Roster.team_color("offense" if side == "offense" else "defense"),
+			Roster.player_tint(slot))
 	stadium.set_line_of_scrimmage(_los_z)
 
 	_build_routes()
@@ -392,7 +394,9 @@ func _set_holder(actor: PlayerActor) -> void:
 func _attach_ball(actor: PlayerActor) -> void:
 	if actor == null:
 		return
-	_ball.call("hold_at", _hand_position(actor), actor.global_transform.basis)
+	# 球尖保持水平：只用角色朝向的偏航，不带俯仰
+	var flat := Basis(Vector3.UP, actor.global_rotation.y)
+	_ball.call("hold_at", _hand_position(actor), flat)
 
 
 # =============================================================================
@@ -407,6 +411,9 @@ func _on_snap_pressed() -> void:
 
 func _begin_snap() -> void:
 	_clear_route_preview()
+	# 开球时把上一档被拔掉的腰旗恢复
+	for slot in _actors:
+		(_actors[slot] as PlayerActor).reset_flags()
 	_phase = Phase.SNAP
 	_snap_elapsed = 0.0
 	_holder = _center
@@ -1244,7 +1251,6 @@ func _show_toast(text: String, color: Color) -> void:
 # =============================================================================
 
 func _physics_process(delta: float) -> void:
-	_advance_clouds(delta)
 	_update_clock(delta)
 
 	match _phase:

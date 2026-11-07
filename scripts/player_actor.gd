@@ -243,6 +243,30 @@ func apply_roster_tint(color: Color) -> void:
 		if item_id != "":
 			_outfit.set_item_color(category, item_id, 0, color)
 
+## 开球时把腰旗恢复显示
+func reset_flags() -> void:
+	if _outfit == null:
+		return
+	for mesh_name in ["左侧腰旗", "右侧腰旗"]:
+		var mesh := _outfit.mesh_node(mesh_name)
+		if mesh != null:
+			mesh.visible = true
+
+
+## 队伍色（球衣/球裤/球袜全队统一）+ 个人色（鞋/手套）
+func apply_colors(team_color: Color, personal_color: Color) -> void:
+	if _outfit == null:
+		return
+	for category in ["shirt", "pants", "socks"]:
+		var item_id := _outfit.equipped_id(category)
+		if item_id != "":
+			_outfit.set_item_color(category, item_id, 0, team_color)
+	for category in ["shoe_l", "shoe_r", "accessory"]:
+		var item_id := _outfit.equipped_id(category)
+		if item_id != "":
+			_outfit.set_item_color(category, item_id, 0, personal_color)
+
+
 func outfit() -> OutfitManager:
 	return _outfit
 

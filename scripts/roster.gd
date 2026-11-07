@@ -31,7 +31,7 @@ static func _random_tint(index: int) -> String:
 
 
 static func _load_from_disk() -> Dictionary:
-	var out := {}
+	var out := {"teams": {"offense": "#2f7cf6", "defense": "#e2543f"}}
 	for i in SLOTS.size():
 		out[SLOTS[i]] = {"name": _random_name(), "tint": _random_tint(i)}
 
@@ -66,6 +66,20 @@ static func save() -> bool:
 	file.store_string(JSON.stringify(_data, "\t"))
 	file.close()
 	return true
+
+
+static func team_color(team: String) -> Color:
+	_ensure()
+	var teams: Dictionary = _data.get("teams", {})
+	var fallback := "#2f7cf6" if team == "offense" else "#e2543f"
+	return Color.html(String(teams.get(team, fallback)))
+
+
+static func set_team_color(team: String, color: Color) -> void:
+	_ensure()
+	if not _data.has("teams"):
+		_data["teams"] = {"offense": "#2f7cf6", "defense": "#e2543f"}
+	(_data["teams"] as Dictionary)[team] = color.to_html(false)
 
 
 static func player_name(slot: String) -> String:
