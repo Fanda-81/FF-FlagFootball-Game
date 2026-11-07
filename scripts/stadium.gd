@@ -52,6 +52,9 @@ const MIDFIELD_Z := FIELD_LENGTH * 0.5
 var los_line: MeshInstance3D
 ## 场地上的文字（END ZONE / 码线数字），攻防转换时整体镜像
 var _text_labels: Array[Label3D] = []
+## 码线数字的成对节点（翻转时两位数字要互换位置）
+var _digit_pairs: Array = []
+var _current_digits: Array = []
 var pylons: Array[Dictionary] = []
 var _seated_crowd: Array[Node3D] = []
 var _standing_crowd: Array[Node3D] = []
@@ -152,6 +155,14 @@ func set_flipped(value: bool) -> void:
 		if label != null and is_instance_valid(label):
 			# 相机绕视线滚 180° 是双轴翻转，文字也要双轴镜像才正
 			label.scale = Vector3(-1.0, -1.0, 1.0) if value else Vector3.ONE
+	# 两位数字在翻转后顺序会反过来（"10" 看成 "01"），所以互换它们的位置
+	for pair in _digit_pairs:
+		var digits: Array = pair
+		if digits.size() >= 4:
+			var a: Label3D = digits[0]
+			var b: Label3D = digits[1]
+			a.position = digits[3] if value else digits[2]
+			b.position = digits[2] if value else digits[3]
 
 
 func _build_field() -> void:
@@ -215,9 +226,17 @@ func _build_field() -> void:
 				number.outline_size = 0
 				number.outline_modulate = Color(0, 0, 0, 0)
 				var z_offset := -0.9 if digit_index == 0 else 0.9
+				var digit_slot := _current_digits
 				number.position = Vector3(side * 12.5, 0.032, yard_mark["z"] + z_offset)
 				number.basis = Basis(Vector3(-1, 0, 0), Vector3(0, 0, 1), Vector3(0, 1, 0)).rotated(Vector3.UP, PI * 0.5)
 				add_child(number)
+				_current_digits.append(number)
+				if _current_digits.size() == 2:
+					_digit_pairs.append([
+						_current_digits[0], _current_digits[1],
+						(_current_digits[0] as Label3D).position, (_current_digits[1] as Label3D).position])
+					for d in _current_digits:
+						_text_labels.append(d)
 
 	# 白线框住整个草皮，低到和草面同一平面。
 	_mesh_box(Vector3(0.16, 0.008, 70.0), Vector3(-FIELD_WIDTH * 0.5, 0.018, 25.0), white)

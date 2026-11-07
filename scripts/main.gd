@@ -325,7 +325,8 @@ func _build_scoreboard() -> void:
 		left.font_size = 96
 		left.pixel_size = 0.012
 		left.modulate = Color("5aa9ff")
-		left.position = Vector3(side * 20.9, 5.4, 22.6)
+		left.position = Vector3(side * 20.6, 5.4, 22.6)
+		left.no_depth_test = true
 		left.rotation.y = side * PI * 0.5
 		add_child(left)
 
@@ -334,7 +335,8 @@ func _build_scoreboard() -> void:
 		right.font_size = 96
 		right.pixel_size = 0.012
 		right.modulate = Color("ff6b5e")
-		right.position = Vector3(side * 20.9, 5.4, 27.4)
+		right.position = Vector3(side * 20.6, 5.4, 27.4)
+		right.no_depth_test = true
 		right.rotation.y = side * PI * 0.5
 		add_child(right)
 
@@ -1362,9 +1364,9 @@ func _build_touchdown_overlay(root: Control) -> void:
 	_confetti.explosiveness = 0.95
 	_confetti.direction = Vector2(0.0, -1.0)
 	_confetti.spread = 180.0
-	_confetti.initial_velocity_min = 300.0
-	_confetti.initial_velocity_max = 780.0
-	_confetti.gravity = Vector2(0.0, 430.0)
+	_confetti.initial_velocity_min = 480.0
+	_confetti.initial_velocity_max = 980.0
+	_confetti.gravity = Vector2(0.0, 620.0)
 	_confetti.scale_amount_min = 2.5
 	_confetti.scale_amount_max = 6.5
 	# 每个粒子从这条渐变里随机取一个颜色 → 各种颜色的彩带
@@ -1379,7 +1381,7 @@ func _build_touchdown_overlay(root: Control) -> void:
 	_confetti.angular_velocity_min = -540.0
 	_confetti.angular_velocity_max = 540.0
 	_confetti.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
-	_confetti.emission_sphere_radius = 40.0
+	_confetti.emission_sphere_radius = 12.0
 	_confetti.position = Vector2(360.0, 640.0)
 	root.add_child(_confetti)
 
