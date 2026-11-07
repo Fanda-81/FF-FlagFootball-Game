@@ -220,6 +220,19 @@ func _ensure_material(mesh_name: String, surface: int) -> StandardMaterial3D:
 	if material.albedo_texture == null and base != null:
 		material.albedo_texture = _texture_of(base)
 
+	# 球鞋用 Nike 鞋面贴图（glb 里没带贴图，只能从工程里补），
+	# albedo_color 仍然作为 Tint 叠加，所以"每只鞋不同颜色"照样有效。
+	if false and _is_boot(mesh_name):
+		var base_tex := load("res://assets/models/textures/boot_basecolor.png") as Texture2D
+		var normal_tex := load("res://assets/models/textures/boot_normal.png") as Texture2D
+		if base_tex != null:
+			material.albedo_texture = base_tex
+		if normal_tex != null:
+			material.normal_enabled = true
+			material.normal_texture = normal_tex
+			material.normal_scale = 0.8
+		material.roughness = 0.55
+		material.metallic = 0.0
 	# 腰旗这类单面片在 Blender 里看不出问题，但 Godot 默认背面剔除会把它们藏起来，
 	# 所以统一改成双面渲染。
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
@@ -228,6 +241,13 @@ func _ensure_material(mesh_name: String, surface: int) -> StandardMaterial3D:
 	_original_colors[key] = material.albedo_color
 	return material
 
+
+
+
+## 是不是球鞋的网格
+func _is_boot(mesh_name: String) -> bool:
+	return mesh_name.begins_with("Left_Boot") or mesh_name.begins_with("Right_Boot") \
+		or mesh_name.begins_with("Left_Stud") or mesh_name.begins_with("Right_Stud")
 
 func _texture_of(material: Material) -> Texture2D:
 	if material is StandardMaterial3D:
