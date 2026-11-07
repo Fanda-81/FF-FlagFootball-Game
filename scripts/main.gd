@@ -119,7 +119,16 @@ const COVERAGE := {"CB1": "X", "CB2": "Y", "LB": "C", "SS": "Z", "FS": "QB"}
 
 # --- 状态 ---------------------------------------------------------------------
 var _actors: Dictionary = {}          # 位置名 -> PlayerActor
-var _qb: PlayerActor                 # 四分卫（QB 是关键字，另起名）
+var _qb: PlayerActor
+## 两队各 5 人（蓝 = 进攻组出身，红 = 防守组出身）
+var _team_blue: Array[PlayerActor] = []
+var _team_red: Array[PlayerActor] = []
+## 当前进攻方
+var _offense_side := "blue"
+const OFF_SLOTS := ["QB", "C", "X", "Y", "Z"]
+const SLOT_LABELS := {"QB": "QB", "C": "C", "X": "X", "Y": "Y", "Z": "Z",
+	"CB1": "CB", "CB2": "CB", "LB": "LB", "SS": "S", "FS": "S"}
+const DEF_SLOTS := ["CB1", "CB2", "LB", "SS", "FS"]                 # 四分卫（QB 是关键字，另起名）
 var _center: PlayerActor
 var _receivers: Array[PlayerActor] = []
 var _defenders: Array[PlayerActor] = []
@@ -397,10 +406,14 @@ func _spawn_teams() -> void:
 		# 目前只有女球员模型，直接标位置，不用随机名字
 		var label_map := {"QB": "QB", "C": "C", "X": "X", "Y": "Y", "Z": "Z",
 			"CB1": "CB", "CB2": "CB", "LB": "LB", "SS": "S", "FS": "S"}
-		actor.actor_name = "女" + String(label_map.get(slot, slot))
+		actor.actor_name = "女" + String(SLOT_LABELS.get(slot, slot))
 		actor.rotation.y = 0.0 if offense else PI
 		add_child(actor)
 		_actors[slot] = actor
+		if offense:
+			_team_blue.append(actor)
+		else:
+			_team_red.append(actor)
 		if slot == "QB":
 			_qb = actor
 		elif slot == "C":
@@ -417,10 +430,12 @@ func _begin_series(los: float, down: int) -> void:
 		_pending_swap = false
 		_swapped = not _swapped
 		_attack_dir = -1 if _swapped else 1
+		_offense_side = "red" if _offense_side == "blue" else "blue"
 		if camera != null:
 			camera.set_flipped(_swapped)
 		if stadium != null:
 			stadium.set_flipped(_swapped)
+	_apply_possession()
 	_los_z = clampf(los, START_LOS, FIELD_MAX_Z - 12.0)
 	_down = down
 	_first_down_z = minf(_los_z + FIRST_DOWN_YARDS, FIELD_MAX_Z)
@@ -446,10 +461,13 @@ func _begin_series(los: float, down: int) -> void:
 		actor.set_move_input(Vector3.ZERO)
 		actor.rotation.y = 0.0 if String(spec["side"]) == "offense" else PI
 		actor.set_active(false)
-		var side := String(FORMATION[slot]["side"])
+		# 颜色跟着"队伍"走：蓝队永远蓝、红队永远红（哪怕换了攻防）
+		var is_blue := _team_blue.has(actor)
 		actor.apply_colors(
-			Roster.team_color("offense" if side == "offense" else "defense"),
-			Roster.player_tint(slot))
+			Roster.team_color("offense") if is_blue else Roster.team_color("defense"),
+			Roster.player_tint(_slot_of(actor)))
+		# 标签跟着"槽位"走：当前站在 QB 位就写女QB
+		actor.set_display_name("女" + String(SLOT_LABELS.get(slot, slot)))
 	stadium.set_line_of_scrimmage(_los_z)
 
 	_build_routes()
@@ -2089,6 +2107,32 @@ func _close_wardrobe() -> void:
 # =============================================================================
 
 ## 按当前战术给每个接球手生成绝对路线点。
+
+
+## 按当前球权把两支队伍分配到进攻/防守槽位
+func _apply_possession() -> void:
+	var offense_team: Array = _team_blue if _offense_side == "blue" else _team_red
+	var defense_team: Array = _team_red if _offense_side == "blue" else _team_blue
+	if offense_team.size() < 5 or defense_team.size() < 5:
+		return
+	_actors.clear()
+	for i in OFF_SLOTS.size():
+		_actors[OFF_SLOTS[i]] = offense_team[i]
+	for i in DEF_SLOTS.size():
+		_actors[DEF_SLOTS[i]] = defense_team[i]
+	_qb = _actors["QB"]
+	_center = _actors["C"]
+	_receivers = [_actors["X"], _actors["Y"], _actors["Z"]]
+	_defenders = [_actors["CB1"], _actors["CB2"], _actors["LB"], _actors["SS"], _actors["FS"]]
+
+
+## 反查某个 actor 当前占的是哪个槽位
+func _slot_of(actor: PlayerActor) -> String:
+	for slot in _actors:
+		if _actors[slot] == actor:
+			return String(slot)
+	return String(actor.name)
+
 func _build_routes() -> void:
 	_routes.clear()
 	_route_index.clear()
@@ -2098,7 +2142,7 @@ func _build_routes() -> void:
 		if actor == null:
 			continue
 		var receiver: PlayerActor = actor as PlayerActor
-		var slot := String(receiver.name)
+		var slot := _slot_of(receiver)
 		if not route_table.has(slot):
 			# 战术里没写中锋路线时，给一条简单的短出线
 			if slot == "C":
@@ -2380,6 +2424,12 @@ func debug_force_interception() -> void:
 		return
 	debug_snap_now()
 	_begin_interception(_defenders[0])
+
+
+## QA：强制换防，验证球权状态机
+func debug_swap_possession() -> void:
+	_pending_swap = true
+	_begin_series(START_LOS, 1)
 
 
 func debug_zoom_out() -> void:

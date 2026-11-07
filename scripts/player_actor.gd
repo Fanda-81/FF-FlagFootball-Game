@@ -272,6 +272,13 @@ func apply_colors(team_color: Color, personal_color: Color) -> void:
 			_outfit.set_item_color(category, item_id, 0, personal_color)
 
 
+## 运行时改显示名（换防后标签要跟着槽位走）
+func set_display_name(value: String) -> void:
+	actor_name = value
+	if _label != null:
+		_label.text = value
+
+
 func outfit() -> OutfitManager:
 	return _outfit
 
