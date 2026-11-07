@@ -82,6 +82,7 @@ const FORMATION := {
 	"CB": {"x": -9.4, "dz": 5.5, "side": "defense", "speed": DEFENDER_SPEED},
 	"LB": {"x": 5.8, "dz": 5.2, "side": "defense", "speed": DEFENDER_SPEED},
 	"S": {"x": 2.4, "dz": 11.0, "side": "defense", "speed": DEFENDER_SPEED},
+	"R": {"x": -4.6, "dz": 8.6, "side": "defense", "speed": DEFENDER_SPEED},
 }
 
 ## 当前战术（6 套战术在 scripts/playbook.gd）
@@ -91,6 +92,9 @@ const TD_ZONE_START := 50.0
 const TD_STOP_Z := 56.0
 ## 接球手跑完路线后的自由跑状态：{mode, dir, timer, flip}
 var _free_state: Dictionary = {}
+## 每个球员起跑延迟（中锋 0.7 秒）
+var _route_delay: Dictionary = {}
+const CENTER_DELAY := 0.7
 var _chasing: Array[PlayerActor] = []
 ## 防守方抄截后转为持球方回攻
 var _defense_possession := false
@@ -101,7 +105,7 @@ var _play_grid: Control
 var _play_label: Label
 
 ## 人盯人：防守球员 → 负责的外接手。
-const COVERAGE := {"CB": "X", "LB": "Y", "S": "Z"}
+const COVERAGE := {"CB": "X", "LB": "Y", "S": "Z", "R": "C"}
 
 # --- 状态 ---------------------------------------------------------------------
 var _actors: Dictionary = {}          # 位置名 -> PlayerActor
@@ -724,6 +728,7 @@ func _begin_interception(defender: PlayerActor) -> void:
 func _advance_return(delta: float) -> void:
 	if _carrier == null:
 		return
+	_clamp_defenders()
 	# 往进攻方那一侧的端区跑（z 负方向）
 	var goal := Vector3(_carrier.global_position.x * 0.6, 0.0, -7.0)
 	var to_goal := goal - _carrier.global_position
@@ -801,6 +806,7 @@ func _advance_run(delta: float) -> void:
 		else:
 			defender.set_move_input(Vector3.ZERO)
 		closest = minf(closest, _flat_distance(defender.global_position, _carrier.global_position))
+	_clamp_defenders()
 
 	_attach_ball(_carrier)
 
@@ -1436,6 +1442,11 @@ func _advance_receivers() -> void:
 			receiver.set_move_input(Vector3.ZERO)
 			continue
 
+		var delay: float = _route_delay.get(receiver, 0.0)
+		if delay > 0.0:
+			_route_delay[receiver] = delay - delta
+			receiver.set_move_input(Vector3.ZERO)
+			continue
 		var mode := int(state["mode"])
 
 		# --- 第一阶段：跑战术路线 ---
@@ -1479,6 +1490,13 @@ func _advance_receivers() -> void:
 				lateral = Vector3(1.0, 0.0, 0.0) if flip % 2 == 0 else Vector3(-1.0, 0.0, 0.0)
 			state["flip"] = flip + 1
 			state["dir"] = lateral
+
+
+## 防守球员不许越过启球线（z 不能小于启球线）
+func _clamp_defenders() -> void:
+	for defender in _defenders:
+		if defender.global_position.z < _los_z + 0.15:
+			defender.global_position.z = _los_z + 0.15
 
 
 func _advance_coverage() -> void:
@@ -1926,9 +1944,17 @@ func _build_routes() -> void:
 	_route_index.clear()
 	var play := Playbook.get_play(_current_play)
 	var route_table: Dictionary = play["routes"]
-	for receiver in _receivers:
+	for actor in _receivers + [_center]:
+		if actor == null:
+			continue
+		var receiver: PlayerActor = actor as PlayerActor
 		var slot := String(receiver.name)
 		if not route_table.has(slot):
+			# 战术里没写中锋路线时，给一条简单的短出线
+			if slot == "C":
+				var start_c: Vector3 = receiver.global_position
+				_routes[receiver] = [start_c + Vector3(0.0, 0.0, 2.0), start_c + Vector3(1.2, 0.0, 4.0)]
+				_route_index[receiver] = 0
 			continue
 		var start := receiver.global_position
 		var points: Array = []
@@ -1943,13 +1969,16 @@ func _build_routes() -> void:
 
 func _reset_free_state() -> void:
 	_free_state.clear()
-	for receiver in _receivers:
-		_free_state[receiver] = {
+	for actor in _receivers + [_center]:
+		if actor == null:
+			continue
+		_free_state[actor] = {
 			"mode": 0,
 			"dir": Vector3(0.0, 0.0, 1.0),
 			"timer": 0.0,
 			"flip": 0,
 		}
+		_route_delay[actor] = CENTER_DELAY if actor == _center else 0.0
 
 
 ## 路线最后一段的方向，跑完路线后沿这个方向继续冲。
@@ -2194,6 +2223,14 @@ func _steer_around(actor: PlayerActor, direction: Vector3) -> Vector3:
 	if steer.length() < 0.01:
 		return direction
 	return (direction + steer).normalized()
+
+## QA：直接强制一次抄截，用来看回攻流程
+func debug_force_interception() -> void:
+	if _defenders.is_empty():
+		return
+	debug_snap_now()
+	_begin_interception(_defenders[0])
+
 
 func debug_zoom_out() -> void:
 	camera.zoom_fully_out()
