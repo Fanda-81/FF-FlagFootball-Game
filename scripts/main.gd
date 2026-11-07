@@ -112,6 +112,12 @@ var _handoff_done := false
 ## PLAY 阶段计时，用于跑球战术的交接球时机
 var _play_elapsed := 0.0
 var _juke_timer := 0.0
+## 左下角移动摇杆
+var _joystick_base: Panel
+var _joystick_knob: Panel
+var _joystick_touch := -1
+var _joystick_vector := Vector2.ZERO
+const JOYSTICK_RADIUS := 68.0
 ## Huddle 超时兜底（防止战术板没弹出导致卡死）
 var _huddle_timer := 0.0
 ## 列阵：目标位置 + 计时
@@ -232,6 +238,7 @@ func _ready() -> void:
 	_build_hud()
 	_begin_series(START_LOS, 1)
 	_build_debug_panel()
+	_build_joystick()
 
 
 
@@ -452,6 +459,78 @@ func _build_empty_field(center: Vector3) -> void:
 # =============================================================================
 # 开发者调试面板
 # =============================================================================
+
+## 左下角移动摇杆（比赛进行中显示）
+func _build_joystick() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "JoystickLayer"
+	layer.layer = 15
+	add_child(layer)
+	_joystick_base = Panel.new()
+	_joystick_base.name = "JoystickBase"
+	_joystick_base.add_theme_stylebox_override("panel", _circle_style(Color(1.0, 1.0, 1.0, 0.12)))
+	_joystick_base.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_joystick_base.anchor_left = 0.0
+	_joystick_base.anchor_top = 1.0
+	_joystick_base.anchor_right = 0.0
+	_joystick_base.anchor_bottom = 1.0
+	_joystick_base.offset_left = 48.0
+	_joystick_base.offset_right = 48.0 + JOYSTICK_RADIUS * 2.0
+	_joystick_base.offset_top = -220.0 - JOYSTICK_RADIUS * 2.0
+	_joystick_base.offset_bottom = -220.0
+	_joystick_base.visible = false
+	layer.add_child(_joystick_base)
+	_joystick_knob = Panel.new()
+	_joystick_knob.add_theme_stylebox_override("panel", _circle_style(Color(0.45, 0.78, 1.0, 0.55)))
+	_joystick_knob.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_joystick_knob.size = Vector2(56.0, 56.0)
+	_joystick_knob.position = Vector2(JOYSTICK_RADIUS - 28.0, JOYSTICK_RADIUS - 28.0)
+	_joystick_base.add_child(_joystick_knob)
+
+
+func _joystick_rect() -> Rect2:
+	if _joystick_base == null:
+		return Rect2()
+	return Rect2(_joystick_base.global_position, _joystick_base.size)
+
+
+func _update_joystick(position: Vector2) -> void:
+	var center := _joystick_rect().get_center()
+	var offset := position - center
+	if offset.length() > JOYSTICK_RADIUS:
+		offset = offset.normalized() * JOYSTICK_RADIUS
+	if _joystick_knob != null:
+		_joystick_knob.position = Vector2(JOYSTICK_RADIUS, JOYSTICK_RADIUS) + offset - Vector2(28.0, 28.0)
+	_joystick_vector = offset / JOYSTICK_RADIUS
+
+
+func _reset_joystick() -> void:
+	_joystick_touch = -1
+	_joystick_vector = Vector2.ZERO
+	if _joystick_knob != null:
+		_joystick_knob.position = Vector2(JOYSTICK_RADIUS - 28.0, JOYSTICK_RADIUS - 28.0)
+
+
+func _input(event: InputEvent) -> void:
+	if _joystick_base == null or not _joystick_base.visible:
+		return
+	if event is InputEventScreenTouch:
+		if event.pressed and _joystick_touch == -1 and _joystick_rect().grow(40.0).has_point(event.position):
+			_joystick_touch = event.index
+			_update_joystick(event.position)
+			get_viewport().set_input_as_handled()
+		elif not event.pressed and event.index == _joystick_touch:
+			_reset_joystick()
+			get_viewport().set_input_as_handled()
+	elif event is InputEventScreenDrag and event.index == _joystick_touch:
+		_update_joystick(event.position)
+		get_viewport().set_input_as_handled()
+
+
+## QA：直接设置摇杆向量
+func debug_set_joystick(x: float, y: float) -> void:
+	_joystick_vector = Vector2(x, y).limit_length(1.0)
+
 
 func _build_debug_panel() -> void:
 	var layer := CanvasLayer.new()
@@ -1143,6 +1222,11 @@ func _apply_keyboard_move() -> void:
 	if _phase != Phase.PLAY and _phase != Phase.RUN and _phase != Phase.FLIGHT:
 		return
 	var dir := Vector3.ZERO
+	# 摇杆优先
+	if _joystick_vector.length() > 0.15:
+		var jr := -1.0 if not _swapped else 1.0
+		var ju := 1.0 if not _swapped else -1.0
+		dir = Vector3(_joystick_vector.x * jr, 0.0, -_joystick_vector.y * ju)
 	# 屏幕方向映射：俯视机位 screen-right = -X、screen-up = +Z；
 	# 攻防转换 180° 翻转后两者都反向
 	var right := -1.0 if not _swapped else 1.0
@@ -1155,7 +1239,7 @@ func _apply_keyboard_move() -> void:
 		dir.z += up
 	if Input.is_key_pressed(KEY_S):
 		dir.z -= up
-	if dir == Vector3.ZERO:
+	if dir.length() <= 0.15:
 		return
 	dir = dir.normalized()
 	if _carrier != null:
@@ -1808,6 +1892,8 @@ func _physics_process(delta: float) -> void:
 	_update_clock(delta)
 	if _juke_timer > 0.0:
 		_juke_timer = maxf(0.0, _juke_timer - delta)
+	if _joystick_base != null:
+		_joystick_base.visible = _phase == Phase.PLAY or _phase == Phase.FLIGHT or _phase == Phase.RUN
 	_apply_keyboard_move()
 
 	match _phase:
