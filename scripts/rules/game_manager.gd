@@ -199,7 +199,8 @@ func end_play(reason: String, final_yards: float, pid := -1) -> bool:
 			ball_position_yards = final_yards
 			_log("[PLAY %03d] %s AT YARD %.1f (RETURN END)" % [play_id, reason, final_yards])
 			if reason == "TOUCHDOWN":
-				process_touchdown()
+				if not process_touchdown():
+					finish_return(final_yards)
 			else:
 				finish_return(final_yards)
 			return true
@@ -279,13 +280,14 @@ func process_safety() -> void:
 	change_possession("SAFETY", line_of_scrimmage)
 
 
-func process_touchdown() -> void:
+func process_touchdown() -> bool:
 	if not is_opponent_endzone(possession_team, ball_position_yards):
-		_log("[PLAY %03d] TD REJECTED — BALL %.1f NOT IN ENDZONE" % [play_id, ball_position_yards])
-		_advance_down()
-		return
+		# 拒绝：不加分、不换权、不改档数、不推进比赛
+		_log("[PLAY %03d] TD REJECTED — BALL %.1f NOT IN ENDZONE (NO SIDE EFFECT)" % [play_id, ball_position_yards])
+		last_event = "TD_REJECTED"
+		return false
 	if match_state == State.TOUCHDOWN:
-		return
+		return false
 	match_state = State.TOUCHDOWN
 	last_event = "TOUCHDOWN"
 	if possession_team == "blue":
@@ -294,6 +296,7 @@ func process_touchdown() -> void:
 		score_red += touchdown_points
 	_log("[PLAY %03d] TOUCHDOWN %s (+%d)" % [play_id, possession_team.to_upper(), touchdown_points])
 	_after_score(possession_team)
+	return true
 
 
 func _after_score(scorer: String) -> void:
@@ -313,10 +316,17 @@ func _after_score(scorer: String) -> void:
 
 func _advance_down() -> void:
 	var direction := get_attacking_direction()
-	var reached := (ball_position_yards - first_down_line) * direction >= -0.01
-	if reached:
-		award_first_down()
-		return
+	if phase == 1:
+		# 第一阶段：目标线是中场，到达即新首攻
+		var reached := (ball_position_yards - first_down_line) * direction >= -0.01
+		if reached:
+			award_first_down()
+			return
+	elif is_opponent_endzone(possession_team, ball_position_yards):
+		# 第二阶段：目标线是达阵线，只有球真正进入对方端区才达阵
+		if process_touchdown():
+			return
+	# 其它情况一律按死球正常推进档数（phase 2 绝不 award_first_down）
 	down_number += 1
 	if down_number > downs_total:
 		_archive(play_id, "TURNOVER_ON_DOWNS", ball_position_yards)

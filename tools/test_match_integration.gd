@@ -139,8 +139,76 @@ func _initialize() -> void:
 		g.end_play("FLAG_PULL", spot)
 		_check(is_equal_approx(g.line_of_scrimmage, spot), "E 位置 %.1f 应保留（实际 %.1f）" % [spot, g.line_of_scrimmage])
 
+
+	# ================= P0：phase 2 达阵与首攻 =================
+	g.reset_match()   # 清零比分，避免受前面用例影响
+	# A 红队 phase1 到达中场 → 进入 phase2
+	g.debug_setup("red", 40.0, 1)
+	_check(g.phase == 1 and is_equal_approx(g.first_down_line, 35.0), "A 起始应为 phase1/中场")
+	g.start_play(); g.end_play("FLAG_PULL", 34.0)
+	_check(g.phase == 2, "A 过中场应进入 phase2（实际 %d）" % g.phase)
+	_check(is_equal_approx(g.first_down_line, 10.0), "A 目标线应变 10（实际 %.1f）" % g.first_down_line)
+
+	# B 红队 phase2 在 14.4 被拔旗：不达阵、不首攻
+	g.debug_setup("red", 14.4, 1)
+	g.start_play(); g.end_play("FLAG_PULL", 14.4)
+	_check(g.score_blue == 0 and g.score_red == 0, "B 不该得分")
+	_check(g.down_number == 2, "B 应进入 2 档（实际 %d）" % g.down_number)
+	_check(g.last_event != "FIRST_DOWN", "B 不该是首攻（实际 %s）" % g.last_event)
+
+	# C 红队推进到 6.5：合法达阵 +6
+	g.debug_setup("red", 12.0, 1)
+	g.start_play(); g.end_play("FLAG_PULL", 6.5)
+	_check(g.score_red == 6, "C 红队应 +6（实际 %d）" % g.score_red)
+	_check(g.last_event == "TOUCHDOWN", "C 应为达阵事件（实际 %s）" % g.last_event)
+
+	# D 蓝队对称：推进到 62 达阵
+	g.start_match(); g.debug_setup("blue", 58.0, 1)
+	g.start_play(); g.end_play("FLAG_PULL", 62.0)
+	_check(g.score_blue == 6, "D 蓝队应 +6（实际 %d）" % g.score_blue)
+
+	# E phase2 反复被拔旗：不得无限首攻
+	g.start_match(); g.debug_setup("red", 14.4, 1)
+	var first_downs := 0
+	for i in 3:
+		g.start_play()
+		g.end_play("FLAG_PULL", 14.4)
+		if g.last_event == "FIRST_DOWN":
+			first_downs += 1
+	_check(first_downs == 0, "E 三次拔旗不该出现首攻（实际 %d 次）" % first_downs)
+	_check(g.down_number == 4, "E 应为 4 档（实际 %d）" % g.down_number)
+
+	# F 非法达阵被拒绝：无任何副作用
+	g.start_match(); g.debug_setup("blue", 20.0, 2)
+	g.start_play()
+	g.end_play("TOUCHDOWN", 20.0)
+	_check(g.score_blue == 0, "F 拒绝时不该加分（实际 %d）" % g.score_blue)
+	_check(g.down_number == 2, "F 拒绝时不该改档数（实际 %d）" % g.down_number)
+	_check(g.possession_team == "blue", "F 拒绝时不该换权")
+
+	# G 同一档重复达阵只计一次
+	g.start_match(); g.debug_setup("blue", 62.0, 1)
+	g.start_play(); g.end_play("TOUCHDOWN", 62.0)
+	var s1 := g.score_blue
+	g.end_play("TOUCHDOWN", 62.0)
+	_check(g.score_blue == s1, "G 重复达阵不该再加分（%d vs %d）" % [s1, g.score_blue])
+
+	# H 旧 PLAY ID 的达阵被拒绝
+	g.start_match(); g.debug_setup("blue", 62.0, 1)
+	var old_pid2 := g.play_id
+	g.start_play(); g.end_play("TOUCHDOWN", 62.0)
+	var s2 := g.score_blue
+	g.end_play("TOUCHDOWN", 62.0, old_pid2)
+	_check(g.score_blue == s2, "H 旧 pid 达阵应被拒绝（%d vs %d）" % [s2, g.score_blue])
+
+	# I 达阵后：对方从本方 5 码线开始
+	g.start_match(); g.debug_setup("blue", 62.0, 1)
+	g.start_play(); g.end_play("TOUCHDOWN", 62.0)
+	_check(g.possession_team == "red", "I 达阵后应换红方（实际 %s）" % g.possession_team)
+	_check(is_equal_approx(g.line_of_scrimmage, 55.0), "I 红方应在本方 5 码线 55（实际 %.1f）" % g.line_of_scrimmage)
+
 	if fails.is_empty():
-		print("[test_lifecycle] OK  A~L + 回攻位置 A~E 共 27 项通过")
+		print("[test_lifecycle] OK  A~L + 回攻 A~E + P0 达阵 A~I 共 42 项通过")
 		quit(0)
 	else:
 		for m in fails:

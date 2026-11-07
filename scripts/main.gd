@@ -1102,7 +1102,7 @@ func _advance_run(delta: float) -> void:
 		_td_timer = TOUCHDOWN_SECONDS
 		_touchdowns += 1
 		if _game != null:
-			_game.process_touchdown()
+			_game.end_play("TOUCHDOWN", _game.world_to_field_yards(_carrier.global_position.z))
 		_score_blue = _game.score_blue
 		_score_red = _game.score_red
 		_refresh_score()
@@ -2575,6 +2575,21 @@ func debug_force_interception() -> void:
 func debug_swap_possession() -> void:
 	_pending_swap = true
 	_begin_series(START_LOS, 1)
+
+
+## QA：在指定逻辑码数处触发一次拔旗（走真实的 _end_down 路径）
+func debug_sim_flag_pull(yards: float) -> void:
+	var z := _game.field_yards_to_world(yards)
+	_end_down(z, "被拔旗")
+
+
+## QA：在指定逻辑码数处触发达阵（走真实的规则引擎校验）
+func debug_sim_touchdown(yards: float) -> void:
+	var z := _game.field_yards_to_world(yards)
+	_game.end_play("TOUCHDOWN", _game.world_to_field_yards(z))
+	_score_blue = _game.score_blue
+	_score_red = _game.score_red
+	_refresh_score()
 
 
 func debug_zoom_out() -> void:
