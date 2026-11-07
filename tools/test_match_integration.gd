@@ -101,8 +101,46 @@ func _initialize() -> void:
 	g.start_play(); g.end_play("INCOMPLETE_PASS", g.line_of_scrimmage)
 	_check(g.down_number == 3, "L 红方未完成后 3 档")
 
+
+	# ---- 回攻结束位置规则（禁止 Touchback）----
+	# A 场内 18 码被拔旗
+	g.debug_setup("blue", 40.0, 1)
+	g.start_play(); g.end_play("INTERCEPTION", 40.0)
+	g.end_play("FLAG_PULL", 18.0)
+	_check(is_equal_approx(g.line_of_scrimmage, 18.0), "A 回攻结束应留在 18（实际 %.1f）" % g.line_of_scrimmage)
+	_check(g.possession_team == "red", "A 截球方应红方持球（实际 %s）" % g.possession_team)
+
+	# B 端区内 3 码被拔旗 → 不 touchback
+	g.debug_setup("blue", 40.0, 1)
+	g.start_play(); g.end_play("INTERCEPTION", 40.0)
+	g.end_play("FLAG_PULL", 3.0)
+	_check(is_equal_approx(g.line_of_scrimmage, 3.0), "B 端区内应留在 3（实际 %.1f）" % g.line_of_scrimmage)
+	_check(g.possession_team == "red", "B 截球方仍应红方持球（实际 %s）" % g.possession_team)
+
+	# C 另一端区 66 码被拔旗
+	g.debug_setup("red", 30.0, 1)
+	g.start_play(); g.end_play("INTERCEPTION", 30.0)
+	g.end_play("FLAG_PULL", 66.0)
+	_check(is_equal_approx(g.line_of_scrimmage, 66.0), "C 应留在 66（实际 %.1f）" % g.line_of_scrimmage)
+	_check(g.possession_team == "blue", "C 截球方应蓝方持球（实际 %s）" % g.possession_team)
+
+	# D 球位 / LOS / 世界坐标一致
+	g.debug_setup("blue", 33.5, 2)
+	g.start_play(); g.end_play("INTERCEPTION", 33.5)
+	g.end_play("FLAG_PULL", 22.25)
+	_check(is_equal_approx(g.line_of_scrimmage, g.ball_position_yards), "D LOS 应等于球位")
+	_check(is_equal_approx(g.field_yards_to_world(g.world_to_field_yards(22.25)), 22.25), "D 世界/逻辑坐标应可逆")
+	_check(is_equal_approx(g.field_yards_to_world(g.line_of_scrimmage), 12.25), "D 世界坐标应为 12.25")
+
+	# E 没有固定 touchback：多次不同位置都应保留
+	for spot in [12.0, 45.0, 7.0, 58.0]:
+		g.debug_setup("blue", 35.0, 1)
+		g.start_play(); g.end_play("INTERCEPTION", 35.0)
+		g.end_play("FLAG_PULL", spot)
+		_check(is_equal_approx(g.line_of_scrimmage, spot), "E 位置 %.1f 应保留（实际 %.1f）" % [spot, g.line_of_scrimmage])
+
 	if fails.is_empty():
-		print("[test_lifecycle] OK  A~L 共 16 项通过（PLAY ID 逐档递增、旧事件被拒）")
+		print("[test_lifecycle] OK  A~L + 回攻位置 A~E 共 27 项通过")
 		quit(0)
 	else:
 		for m in fails:

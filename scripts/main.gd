@@ -1010,7 +1010,7 @@ func _advance_return(delta: float) -> void:
 		# 防守方（非当前进攻方）得分
 		var scorer := "blue" if _offense_side == "red" else "red"
 		if _game != null:
-			_game.process_touchdown()
+			_game.end_play("TOUCHDOWN", _game.world_to_field_yards(_carrier.global_position.z))
 		_score_blue = _game.score_blue
 		_score_red = _game.score_red
 		_refresh_score()
@@ -1035,7 +1035,8 @@ func _advance_return(delta: float) -> void:
 		var mode := randi() % 3
 		_carrier.pull_flags(mode)
 		_show_toast("腰旗被拔掉（%s）· 交换球权" % ["左侧", "右侧", "两侧"][mode], Color("ffb27a"))
-		_game.change_possession("INTERCEPTION_RETURN", _game.world_to_field_yards(_carrier.global_position.z))
+		# 截球时球权已经换给防守方，回攻结束只是开新系列（不能再次换权）
+		_game.end_play("FLAG_PULL", _game.world_to_field_yards(_carrier.global_position.z))
 		_phase = Phase.RESULT
 		_result_timer = RESULT_HOLD_SECONDS
 		_defense_possession = false

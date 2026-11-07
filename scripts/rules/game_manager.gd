@@ -121,6 +121,7 @@ func begin_down() -> void:
 	match_state = State.READY_TO_SNAP
 	_log("[PLAY %03d] %s DOWN %d START AT %.1f (TARGET %.1f)" % [
 		play_id, possession_team.to_upper(), down_number, line_of_scrimmage, first_down_line])
+	field_debug("DOWN START")
 
 
 func debug_setup(team: String, yards: float, down: int) -> void:
@@ -132,6 +133,26 @@ func debug_setup(team: String, yards: float, down: int) -> void:
 	phase = 1 if is_equal_approx(first_down_line, MIDFIELD) else 2
 	play_id = 0
 	begin_down()
+
+
+## 坐标诊断：每次开档/换权/回攻结束都打印
+func field_debug(tag: String) -> void:
+	var ball_world := field_yards_to_world(ball_position_yards)
+	var spawn_world := field_yards_to_world(line_of_scrimmage)
+	_log("[FIELD DEBUG] " + tag)
+	_log("  PLAY ID: %d" % play_id)
+	_log("  POSSESSION TEAM: %s" % possession_team.to_upper())
+	_log("  DOWN: %d" % down_number)
+	_log("  WORLD BALL POSITION Z: %.2f" % ball_world)
+	_log("  LOGICAL BALL YARD: %.2f" % ball_position_yards)
+	_log("  OFFENSE DIRECTION: %+.0f" % get_attacking_direction())
+	_log("  LOS YARD: %.2f" % line_of_scrimmage)
+	_log("  FIRST DOWN TARGET: %.2f" % first_down_line)
+	_log("  BLUE ENDZONE WORLD RANGE: [%.1f, %.1f]" % [field_yards_to_world(0.0), field_yards_to_world(BLUE_GOAL)])
+	_log("  RED ENDZONE WORLD RANGE: [%.1f, %.1f]" % [field_yards_to_world(RED_GOAL), field_yards_to_world(FIELD_LENGTH)])
+	_log("  BALL IN BLUE ENDZONE: %s" % is_own_endzone("blue", ball_position_yards))
+	_log("  BALL IN RED ENDZONE: %s" % is_own_endzone("red", ball_position_yards))
+	_log("  OFFENSE SPAWN WORLD POSITION: %.2f" % spawn_world)
 
 
 func _log(line: String) -> void:
