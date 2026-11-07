@@ -63,8 +63,8 @@ static func build() -> Dictionary:
 	]
 
 	catalog["socks"] = [
-		OutfitItem.create("socks_white", "白球袜", "socks", ["长袜主色", "长袜副色"], Color("f4f7fb"), true),
-		OutfitItem.create("socks_dark", "黑球袜", "socks", ["长袜主色", "长袜副色"], Color("23262b"), true),
+		OutfitItem.create("socks_white", "白球袜", "socks", ["长袜主色", "长袜副色", "长袜"], Color("f4f7fb"), true),
+		OutfitItem.create("socks_dark", "黑球袜", "socks", ["长袜主色", "长袜副色", "长袜"], Color("23262b"), true),
 	]
 
 	catalog["flag"] = [

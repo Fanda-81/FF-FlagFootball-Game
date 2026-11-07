@@ -651,6 +651,9 @@ func _resolve_pass() -> bool:
 			return true
 
 	_pending_result = "传球未完成 · %d/%d" % [_completions, _attempts]
+	# 四分卫懊恼一下
+	if _qb != null:
+		_qb.play_one_shot("defeat", RESULT_HOLD_SECONDS)
 	return false
 
 

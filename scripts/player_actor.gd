@@ -64,6 +64,7 @@ var _visual: Node3D
 var _character: Node3D
 var _anim: AnimationPlayer
 var _outfit: OutfitManager
+var _one_shot_timer := 0.0
 var _ring: MeshInstance3D
 var _label: Label3D
 
@@ -299,11 +300,14 @@ func _start_animations(model: Node3D) -> void:
 
 	# 跑步：直接用模型自带的那段动画（用户烘进 FFfemale 的跑步姿势，姿态最准），
 	# 只保留旋转 —— 髋部固定、原地跑。
-	var run_source := _largest_animation(player)
-	if run_source != null:
-		library.add_animation("run", MixamoRetarget.strip_to_rotations(run_source))
+	# 跑步优先从动作库取（模型自带的不一定是跑步）
+	var run_clip := AnimLibrary.load_clip("run", skeleton, prefix)
+	if run_clip != null:
+		library.add_animation("run", run_clip)
 	else:
-		push_warning("PlayerActor: 模型里没有自带的跑步动画")
+		var run_source := _largest_animation(player)
+		if run_source != null:
+			library.add_animation("run", MixamoRetarget.strip_to_rotations(run_source))
 
 	# 站立：FFSIMU 的「静止站立」，从另一套 Mixamo 骨架重定向过来。
 	# 站立：从动作库取（Huddle Posture01），库里没有就退回生成的姿态
@@ -479,7 +483,21 @@ func _physics_process(delta: float) -> void:
 	_animate(delta, speed)
 
 
+## 播一段一次性动作（比如失误后的沮丧动作），到时间自动回到跑/站
+func play_one_shot(clip_name: String, hold_seconds: float) -> void:
+	if _anim == null or not _anim.has_animation("ff/" + clip_name):
+		return
+	_anim.play("ff/" + clip_name, 0.25)
+	_anim.speed_scale = 1.0
+	_one_shot_timer = hold_seconds
+
+
 func _animate(delta: float, speed: float) -> void:
+	if _one_shot_timer > 0.0:
+		_one_shot_timer -= delta
+		if _one_shot_timer <= 0.0 and _anim != null:
+			_anim.play("ff/idle_huddle", 0.25)
+		return
 	var speed_factor := clampf(speed / maxf(0.001, max_speed), 0.0, 1.0)
 	if _anim != null:
 		# 动起来播跑步，停住播站立（带 0.25 秒过渡）。
