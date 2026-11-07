@@ -2306,27 +2306,18 @@ func _build_routes() -> void:
 	_route_index.clear()
 	var play := Playbook.get_play(_current_play)
 	var route_table: Dictionary = play["routes"]
-	for actor in _receivers + [_center]:
-		if actor == null:
+	var actors: Array = _receivers.duplicate()
+	if _center != null:
+		actors.append(_center)
+	for actor_v in actors:
+		var actor: PlayerActor = actor_v as PlayerActor
+		var slot := _slot_of(actor)
+		var route_id := String(route_table.get(slot, ""))
+		if route_id == "":
 			continue
-		var receiver: PlayerActor = actor as PlayerActor
-		var slot := _slot_of(receiver)
-		if not route_table.has(slot):
-			# 战术里没写中锋路线时，给一条简单的短出线
-			if slot == "C":
-				var start_c: Vector3 = receiver.global_position
-				_routes[receiver] = [start_c + Vector3(0.0, 0.0, 2.0 * _attack_dir), start_c + Vector3(1.2 * _attack_dir, 0.0, 4.0 * _attack_dir)]
-				_route_index[receiver] = 0
-			continue
-		var start := receiver.global_position
-		var points: Array = []
-		for offset in route_table[slot]:
-			var point: Vector3 = start + Vector3(offset.x * _attack_dir, offset.y, offset.z * _attack_dir)
-			point.x = clampf(point.x, FIELD_MIN_X + 0.6, FIELD_MAX_X - 0.6)
-			point.z = clampf(point.z, FIELD_MIN_Z + 0.8, FIELD_MAX_Z - 0.8)
-			points.append(point)
-		_routes[receiver] = points
-		_route_index[receiver] = 0
+		var points := RouteLibrary.build(route_id, actor.global_position, float(_attack_dir))
+		_routes[actor] = points
+		_route_index[actor] = 0
 
 
 func _reset_free_state() -> void:
