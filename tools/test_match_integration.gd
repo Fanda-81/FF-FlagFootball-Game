@@ -160,7 +160,7 @@ func _initialize() -> void:
 	g.debug_setup("red", 12.0, 1)
 	g.start_play(); g.end_play("FLAG_PULL", 6.5)
 	_check(g.score_red == 6, "C 红队应 +6（实际 %d）" % g.score_red)
-	_check(g.last_turnover_reason == "AFTER_TOUCHDOWN", "C 应记录达阵后重开（实际 %s）" % g.last_turnover_reason)
+	_check(g.extra_point_pending, "C 达阵后应进入附加分")
 
 	# D 蓝队对称：推进到 62 达阵
 	g.start_match(); g.debug_setup("blue", 58.0, 1)
@@ -204,7 +204,9 @@ func _initialize() -> void:
 	# I 达阵后：对方从本方 5 码线开始
 	g.start_match(); g.debug_setup("blue", 62.0, 1)
 	g.start_play(); g.end_play("TOUCHDOWN", 62.0)
-	_check(g.possession_team == "red", "I 达阵后应换红方（实际 %s）" % g.possession_team)
+	_check(g.possession_team == "blue" and g.extra_point_pending, "I 达阵后由得分方尝试附加分")
+	g.start_play(); g.end_play("INCOMPLETE_PASS", 55.0)
+	_check(g.possession_team == "red", "I 附加分结束应换红方（实际 %s）" % g.possession_team)
 	_check(is_equal_approx(g.line_of_scrimmage, 55.0), "I 红方应在本方 5 码线 55（实际 %.1f）" % g.line_of_scrimmage)
 
 
@@ -213,7 +215,7 @@ func _initialize() -> void:
 	# 1 红队 55 → 7.8（对方端区）允许达阵
 	g.debug_setup("red", 55.0, 1)
 	g.start_play(); g.end_play("FLAG_PULL", 7.8)
-	_check(g.score_red == 6 and g.last_turnover_reason == "AFTER_TOUCHDOWN", "端区1 红队进对方端区应达阵（score=%d）" % g.score_red)
+	_check(g.score_red == 6 and g.extra_point_pending, "端区1 红队进对方端区应达阵（score=%d）" % g.score_red)
 
 	# 2 红队 55 → 60（自己端区）绝不能达阵
 	g.reset_match(); g.debug_setup("red", 55.0, 4)
@@ -224,7 +226,7 @@ func _initialize() -> void:
 	# 3 蓝队 15 → 60.1（对方端区）允许达阵
 	g.reset_match(); g.debug_setup("blue", 15.0, 1)
 	g.start_play(); g.end_play("FLAG_PULL", 60.1)
-	_check(g.score_blue == 6 and g.last_turnover_reason == "AFTER_TOUCHDOWN", "端区3 蓝队进对方端区应达阵（score=%d）" % g.score_blue)
+	_check(g.score_blue == 6 and g.extra_point_pending, "端区3 蓝队进对方端区应达阵（score=%d）" % g.score_blue)
 
 	# 4 蓝队 15 → 10（自己端区）绝不能达阵
 	g.reset_match(); g.debug_setup("blue", 15.0, 2)
@@ -271,13 +273,15 @@ func _initialize() -> void:
 	# C 蓝队达阵 → 红队从 55 开始
 	g.reset_match(); g.debug_setup("blue", 58.0, 1)
 	g.start_play(); g.end_play("TOUCHDOWN", 62.0)
-	_check(g.score_blue == 6 and g.possession_team == "red", "C 蓝队 +6 并换红方")
+	_check(g.score_blue == 6 and g.extra_point_pending, "C 蓝队 +6 并进入附加分")
+	g.start_play(); g.end_play("INCOMPLETE_PASS", 55.0)
 	_check(is_equal_approx(g.line_of_scrimmage, 55.0), "C 红队应从 55 开始（实际 %.1f）" % g.line_of_scrimmage)
 
 	# D 红队达阵 → 蓝队从 15 开始
 	g.reset_match(); g.debug_setup("red", 12.0, 1)
 	g.start_play(); g.end_play("TOUCHDOWN", 6.5)
-	_check(g.score_red == 6 and g.possession_team == "blue", "D 红队 +6 并换蓝方")
+	_check(g.score_red == 6 and g.extra_point_pending, "D 红队 +6 并进入附加分")
+	g.start_play(); g.end_play("INCOMPLETE_PASS", 5.0)
 	_check(is_equal_approx(g.line_of_scrimmage, 15.0), "D 蓝队应从 15 开始（实际 %.1f）" % g.line_of_scrimmage)
 
 	# E 截球回攻在蓝方端区被拔旗 → 不判 Safety、不 Touchback、保留位置
@@ -344,8 +348,30 @@ func _initialize() -> void:
 	_check(g.possession_team == "red", "抄截 应换红方（实际 %s）" % g.possession_team)
 	_check(g.match_state == GameManager.State.RETURN_IN_PROGRESS, "抄截 应进入回攻状态（实际 %s）" % g.match_state)
 
+
+	# ===== 附加分 =====
+	g.reset_match(); g.debug_setup("blue", 58.0, 1)
+	g.start_play(); g.end_play("TOUCHDOWN", 62.0)
+	_check(g.score_blue == 6, "附加1 达阵应 +6（实际 %d）" % g.score_blue)
+	_check(g.extra_point_pending, "附加1 应进入附加分")
+	_check(g.extra_point_pending, "附加1 附加分标记应开启")
+	_check(g.possession_team == "blue", "附加1 由得分方尝试")
+	_check(is_equal_approx(g.line_of_scrimmage, 55.0), "附加1 应从对方 5 码线 55 开始（实际 %.1f）" % g.line_of_scrimmage)
+	g.start_play(); g.end_play("TOUCHDOWN", 62.0)
+	_check(g.score_blue == 7, "附加2 附加分成功应 +1（实际 %d）" % g.score_blue)
+	_check(not g.extra_point_pending, "附加2 附加分应结束")
+	_check(g.possession_team == "red", "附加2 之后应换红方开球")
+	_check(is_equal_approx(g.line_of_scrimmage, 55.0), "附加2 红方从本方 5 码线开始（实际 %.1f）" % g.line_of_scrimmage)
+
+	g.reset_match(); g.debug_setup("blue", 58.0, 1)
+	g.start_play(); g.end_play("TOUCHDOWN", 62.0)
+	g.start_play(); g.end_play("INCOMPLETE_PASS", 55.0)
+	_check(g.score_blue == 6, "附加3 附加分失败只保留 6 分（实际 %d）" % g.score_blue)
+	_check(g.possession_team == "red", "附加3 之后应换红方")
+	_check(is_equal_approx(g.line_of_scrimmage, 55.0), "附加3 红方从本方 5 码线开始（实际 %.1f）" % g.line_of_scrimmage)
+
 	if fails.is_empty():
-		print("[test_lifecycle] OK  80 项 + 换权重启/抄截 6 项 共 86 项通过")
+		print("[test_lifecycle] OK  86 项 + 附加分 11 项 共 97 项通过")
 		quit(0)
 	else:
 		for m in fails:

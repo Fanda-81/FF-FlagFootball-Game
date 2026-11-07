@@ -36,6 +36,10 @@ var play_id := 0
 var phase := 1
 var play_already_ended := false
 var awaiting_return := false
+## 附加分（达阵后一次进攻机会，成功 +1）
+var extra_point_pending := false
+var extra_point_team := ""
+const EXTRA_POINT_POINTS := 1
 var play_started_at := 0.0
 var play_history: Array = []
 
@@ -114,6 +118,8 @@ func reset_match() -> void:
 	play_id = 0
 	play_already_ended = true
 	awaiting_return = false
+	extra_point_pending = false
+	extra_point_team = ""
 	play_history.clear()
 
 
@@ -313,13 +319,38 @@ func process_touchdown() -> bool:
 		return false
 	match_state = State.TOUCHDOWN
 	last_event = "TOUCHDOWN"
+	if extra_point_pending:
+		# 附加分成功
+		if extra_point_team == "blue":
+			score_blue += EXTRA_POINT_POINTS
+		else:
+			score_red += EXTRA_POINT_POINTS
+		_log("[PLAY %03d] EXTRA POINT GOOD — %s (+%d)" % [play_id, extra_point_team.to_upper(), EXTRA_POINT_POINTS])
+		extra_point_pending = false
+		_after_score(extra_point_team)
+		return true
 	if possession_team == "blue":
 		score_blue += touchdown_points
 	else:
 		score_red += touchdown_points
 	_log("[PLAY %03d] TOUCHDOWN %s (+%d)" % [play_id, possession_team.to_upper(), touchdown_points])
-	_after_score(possession_team)
+	extra_point_team = possession_team
+	extra_point_pending = true
+	_start_extra_point(extra_point_team)
 	return true
+
+
+## 达阵后：得分方从对方 5 码线尝试一次附加分
+func _start_extra_point(team: String) -> void:
+	possession_team = team
+	line_of_scrimmage = 55.0 if team == "blue" else 5.0
+	ball_position_yards = line_of_scrimmage
+	down_number = 1
+	phase = 2
+	first_down_line = target_line_for(team, line_of_scrimmage)
+	# 状态保持 READY_TO_SNAP 以便开球；附加分用 extra_point_pending 标记
+	_log("[PLAY %03d] EXTRA POINT ATTEMPT — %s FROM %.1f" % [play_id, team.to_upper(), line_of_scrimmage])
+	begin_down()
 
 
 func _after_score(scorer: String) -> void:
@@ -339,6 +370,12 @@ func _after_score(scorer: String) -> void:
 
 
 func _advance_down() -> void:
+	# 附加分没打成 → 不加分，直接进入重新开球
+	if extra_point_pending:
+		extra_point_pending = false
+		_log("[PLAY %03d] EXTRA POINT FAILED" % play_id)
+		_after_score(extra_point_team)
+		return
 	var direction := get_attacking_direction()
 	# 只要真正进入对方端区，无论第几阶段都先判达阵
 	if is_opponent_endzone(possession_team, ball_position_yards):
