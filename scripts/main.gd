@@ -658,6 +658,8 @@ func _begin_snap() -> void:
 		(_actors[slot] as PlayerActor).reset_flags()
 	_phase = Phase.SNAP
 	_snap_elapsed = 0.0
+	if _game != null:
+		_game.start_play()
 	_holder = _center
 	_qb_snap_origin = _qb.global_position
 	_play_clock = PLAY_CLOCK
@@ -1007,9 +1009,11 @@ func _advance_return(delta: float) -> void:
 		_touchdowns += 1
 		# 防守方（非当前进攻方）得分
 		var scorer := "blue" if _offense_side == "red" else "red"
-		_add_score(scorer)
 		if _game != null:
 			_game.process_touchdown()
+		_score_blue = _game.score_blue
+		_score_red = _game.score_red
+		_refresh_score()
 		if scorer == _offense_side:
 			_pending_swap = true
 		_show_touchdown()
@@ -1096,9 +1100,11 @@ func _advance_run(delta: float) -> void:
 		_td_celebrating = true
 		_td_timer = TOUCHDOWN_SECONDS
 		_touchdowns += 1
-		_add_score(_offense_side)
 		if _game != null:
 			_game.process_touchdown()
+		_score_blue = _game.score_blue
+		_score_red = _game.score_red
+		_refresh_score()
 		_pending_swap = true
 		_clock_running = false
 		_show_touchdown()

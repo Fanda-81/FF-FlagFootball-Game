@@ -1,17 +1,13 @@
 extends Node
 class_name GameManager
-## 比赛规则引擎 —— **唯一**允许修改比赛状态的地方。
-##
-## 逻辑坐标：球场 70 码（0 蓝底线 / 10 蓝达阵线 / 35 中场 / 60 红达阵线 / 70 红底线）
-##   world_z = yards - 10      yards = world_z + 10
-##   蓝方进攻码数增大，红方进攻码数减小。
+## 比赛规则引擎（唯一权威）。本次聚焦：PLAY ID 生命周期 + 事件校验。
 
 signal state_changed(state_name: String)
 signal event_logged(line: String)
 
 enum State {
 	PRE_GAME, READY_TO_SNAP, BALL_IN_PLAY, PASS_IN_AIR,
-	PLAY_DEAD, TOUCHDOWN, EXTRA_POINT, TURNOVER, HALFTIME, GAME_OVER,
+	PLAY_DEAD, RETURN_IN_PROGRESS, TOUCHDOWN, EXTRA_POINT, TURNOVER, HALFTIME, GAME_OVER,
 }
 
 const FIELD_LENGTH := 70.0
@@ -38,8 +34,9 @@ var last_turnover_reason := ""
 var play_id := 0
 var phase := 1
 var play_already_ended := false
-## 截球后正在回攻，回攻结束才开始新系列
 var awaiting_return := false
+var play_started_at := 0.0
+var play_history: Array = []
 
 
 func _init() -> void:
@@ -71,8 +68,7 @@ func get_defense_team() -> String:
 
 
 func get_yards_to_go() -> int:
-	var diff := (first_down_line - line_of_scrimmage) * get_attacking_direction()
-	return int(maxf(1.0, ceilf(diff)))
+	return int(maxf(1.0, ceilf((first_down_line - line_of_scrimmage) * get_attacking_direction())))
 
 
 func target_line_for(team: String, yards: float) -> float:
@@ -90,7 +86,7 @@ func is_opponent_endzone(team: String, yards: float) -> bool:
 
 
 # =============================================================================
-# 基础
+# 生命周期
 # =============================================================================
 
 func reset_match() -> void:
@@ -106,14 +102,25 @@ func reset_match() -> void:
 	last_event = ""
 	last_turnover_reason = ""
 	play_id = 0
-	play_already_ended = false
+	play_already_ended = true
+	awaiting_return = false
+	play_history.clear()
 
 
 func start_match() -> void:
 	reset_match()
-	play_id = 1
+	begin_down()
+
+
+## 新的一档正式开始：这里才把 PLAY ID +1
+func begin_down() -> void:
+	play_id += 1
+	play_already_ended = false
+	awaiting_return = false
+	play_started_at = Time.get_ticks_msec() / 1000.0
 	match_state = State.READY_TO_SNAP
-	_log("[PLAY %03d] %s OFFENSE START AT %.1f" % [play_id, possession_team.to_upper(), line_of_scrimmage])
+	_log("[PLAY %03d] %s DOWN %d START AT %.1f (TARGET %.1f)" % [
+		play_id, possession_team.to_upper(), down_number, line_of_scrimmage, first_down_line])
 
 
 func debug_setup(team: String, yards: float, down: int) -> void:
@@ -123,8 +130,8 @@ func debug_setup(team: String, yards: float, down: int) -> void:
 	down_number = down
 	first_down_line = target_line_for(team, yards)
 	phase = 1 if is_equal_approx(first_down_line, MIDFIELD) else 2
-	match_state = State.READY_TO_SNAP
-	play_already_ended = false
+	play_id = 0
+	begin_down()
 
 
 func _log(line: String) -> void:
@@ -132,50 +139,60 @@ func _log(line: String) -> void:
 	event_logged.emit(line)
 
 
-func _set_state(new_state: State) -> void:
-	if match_state == new_state:
+func _set_state(s: State) -> void:
+	if match_state == s:
 		return
-	match_state = new_state
-	state_changed.emit(State.keys()[new_state])
+	match_state = s
+	state_changed.emit(State.keys()[s])
 
 
-# =============================================================================
-# 回合
-# =============================================================================
-
-func start_play() -> bool:
-	if match_state != State.READY_TO_SNAP:
+## 开球：只有 READY_TO_SNAP 合法
+func start_play(pid := -1) -> bool:
+	if pid >= 0 and pid != play_id:
+		_log("[PLAY %03d] REJECTED STALE EVENT: SNAP (pid %d)" % [play_id, pid])
 		return false
-	play_id += 1
-	play_already_ended = false
+	if match_state != State.READY_TO_SNAP:
+		_log("[PLAY %03d] REJECTED SNAP — STATE %s" % [play_id, State.keys()[match_state]])
+		return false
 	match_state = State.BALL_IN_PLAY
-	_log("[PLAY %03d] SNAP FROM %.1f  DOWN %d" % [play_id, line_of_scrimmage, down_number])
+	_log("[PLAY %03d] SNAP" % play_id)
 	return true
 
 
-## 回攻结束：在死球位置开始新系列（down 1）
-func finish_return(final_yards: float) -> void:
-	awaiting_return = false
-	ball_position_yards = clampf(final_yards, 0.0, FIELD_LENGTH)
-	line_of_scrimmage = ball_position_yards
-	down_number = 1
-	first_down_line = target_line_for(possession_team, line_of_scrimmage)
-	phase = 1 if is_equal_approx(first_down_line, MIDFIELD) else 2
-	_log("[PLAY %03d] RETURN ENDED AT %.1f — NEW SERIES" % [play_id, ball_position_yards])
-	_set_state(State.READY_TO_SNAP)
+func on_pass() -> void:
+	if match_state == State.BALL_IN_PLAY:
+		match_state = State.PASS_IN_AIR
 
 
-func end_play(reason: String, final_yards: float) -> void:
+## 结束本档。reason 必须是合法事件；pid 用来拒绝上一档的延迟事件。
+func end_play(reason: String, final_yards: float, pid := -1) -> bool:
+	if pid >= 0 and pid != play_id:
+		_log("[PLAY %03d] REJECTED STALE EVENT: %s (pid %d)" % [play_id, reason, pid])
+		return false
 	if play_already_ended:
-		_log("[PLAY %03d] IGNORED %s (PLAY ALREADY ENDED)" % [play_id, reason])
-		return
+		_log("[PLAY %03d] REJECTED DUPLICATE: %s" % [play_id, reason])
+		return false
+	if match_state == State.RETURN_IN_PROGRESS:
+		if reason in ["FLAG_PULL", "OUT_OF_BOUNDS", "TOUCHDOWN"]:
+			play_already_ended = true
+			ball_position_yards = final_yards
+			_log("[PLAY %03d] %s AT YARD %.1f (RETURN END)" % [play_id, reason, final_yards])
+			if reason == "TOUCHDOWN":
+				process_touchdown()
+			else:
+				finish_return(final_yards)
+			return true
+		_log("[PLAY %03d] REJECTED IN RETURN_TURNOVER: %s" % [play_id, reason])
+		return false
+	if match_state != State.BALL_IN_PLAY and match_state != State.PASS_IN_AIR:
+		_log("[PLAY %03d] REJECTED EVENT %s — STATE %s" % [play_id, reason, State.keys()[match_state]])
+		return false
+
 	play_already_ended = true
 	ball_position_yards = final_yards
 	match_state = State.PLAY_DEAD
 	_log("[PLAY %03d] %s AT YARD %.1f" % [play_id, reason, final_yards])
-	if awaiting_return and reason in ["FLAG_PULL", "OUT_OF_BOUNDS"]:
-		finish_return(final_yards)
-		return
+
 	match reason:
 		"INCOMPLETE_PASS":
 			process_incomplete_pass()
@@ -191,7 +208,12 @@ func end_play(reason: String, final_yards: float) -> void:
 			process_turnover_on_downs()
 		_:
 			process_flag_pull()
+	return true
 
+
+# =============================================================================
+# 事件实现
+# =============================================================================
 
 func process_incomplete_pass() -> void:
 	ball_position_yards = line_of_scrimmage
@@ -215,11 +237,15 @@ func process_turnover_on_downs() -> void:
 	change_possession("TURNOVER_ON_DOWNS", ball_position_yards)
 
 
+## 截球：球权立刻给防守方，但**本档不结束**，进入回攻
 func process_interception() -> void:
 	last_event = "INTERCEPTION"
-	change_possession("INTERCEPTION", ball_position_yards)
-	# 允许回攻：等回攻结束（拔旗/出界/达阵）才确定新系列的位置
+	possession_team = get_defense_team()
+	last_turnover_reason = "INTERCEPTION"
 	awaiting_return = true
+	match_state = State.RETURN_IN_PROGRESS
+	play_already_ended = false
+	_log("[PLAY %03d] INTERCEPTION — %s RETURN IN PROGRESS" % [play_id, possession_team.to_upper()])
 
 
 func process_safety() -> void:
@@ -233,11 +259,11 @@ func process_safety() -> void:
 
 
 func process_touchdown() -> void:
-	if match_state == State.TOUCHDOWN:
-		return
 	if not is_opponent_endzone(possession_team, ball_position_yards):
 		_log("[PLAY %03d] TD REJECTED — BALL %.1f NOT IN ENDZONE" % [play_id, ball_position_yards])
 		_advance_down()
+		return
+	if match_state == State.TOUCHDOWN:
 		return
 	match_state = State.TOUCHDOWN
 	last_event = "TOUCHDOWN"
@@ -246,7 +272,6 @@ func process_touchdown() -> void:
 	else:
 		score_red += touchdown_points
 	_log("[PLAY %03d] TOUCHDOWN %s (+%d)" % [play_id, possession_team.to_upper(), touchdown_points])
-	match_state = State.EXTRA_POINT
 	_after_score(possession_team)
 
 
@@ -261,7 +286,8 @@ func _after_score(scorer: String) -> void:
 	first_down_line = MIDFIELD
 	last_turnover_reason = "AFTER_TOUCHDOWN"
 	_log("[PLAY %03d] RESTART — %s FROM OWN 5 (%.1f)" % [play_id, receiver.to_upper(), start_yards])
-	_set_state(State.READY_TO_SNAP)
+	_archive(play_id, "TOUCHDOWN", start_yards)
+	begin_down()
 
 
 func _advance_down() -> void:
@@ -271,12 +297,14 @@ func _advance_down() -> void:
 		award_first_down()
 		return
 	down_number += 1
-	_log("[PLAY %03d] DOWN %d -> DOWN %d" % [play_id, down_number - 1, down_number])
 	if down_number > downs_total:
+		_archive(play_id, "TURNOVER_ON_DOWNS", ball_position_yards)
 		process_turnover_on_downs()
 		return
 	line_of_scrimmage = ball_position_yards
-	_set_state(State.READY_TO_SNAP)
+	_log("[PLAY %03d] PLAY ENDED — NEXT: DOWN %d" % [play_id, down_number])
+	_archive(play_id, last_event, ball_position_yards)
+	begin_down()
 
 
 func award_first_down() -> void:
@@ -285,7 +313,20 @@ func award_first_down() -> void:
 	first_down_line = target_line_for(possession_team, line_of_scrimmage)
 	phase = 1 if is_equal_approx(first_down_line, MIDFIELD) else 2
 	_log("[PLAY %03d] FIRST DOWN AT %.1f (TARGET %.1f)" % [play_id, line_of_scrimmage, first_down_line])
-	_set_state(State.READY_TO_SNAP)
+	_archive(play_id, "FIRST_DOWN", ball_position_yards)
+	begin_down()
+
+
+func finish_return(final_yards: float) -> void:
+	ball_position_yards = clampf(final_yards, 0.0, FIELD_LENGTH)
+	line_of_scrimmage = ball_position_yards
+	down_number = 1
+	first_down_line = target_line_for(possession_team, line_of_scrimmage)
+	phase = 1 if is_equal_approx(first_down_line, MIDFIELD) else 2
+	awaiting_return = false
+	_log("[PLAY %03d] RETURN ENDED AT %.1f — NEW SERIES" % [play_id, ball_position_yards])
+	_archive(play_id, "RETURN_END", ball_position_yards)
+	begin_down()
 
 
 func change_possession(reason: String, turnover_yards: float) -> void:
@@ -296,18 +337,30 @@ func change_possession(reason: String, turnover_yards: float) -> void:
 	line_of_scrimmage = ball_position_yards
 	first_down_line = target_line_for(possession_team, line_of_scrimmage)
 	phase = 1 if is_equal_approx(first_down_line, MIDFIELD) else 2
-	_log("[PLAY %03d] POSSESSION -> %s (%s) AT %.1f  TARGET %.1f" % [
+	_log("[PLAY %03d] POSSESSION -> %s (%s) AT %.1f TARGET %.1f" % [
 		play_id, possession_team.to_upper(), reason, ball_position_yards, first_down_line])
-	_set_state(State.READY_TO_SNAP)
+	_archive(play_id, reason, ball_position_yards)
+	begin_down()
 
 
-# =============================================================================
-# 调试面板
-# =============================================================================
+func _archive(pid: int, reason: String, final_yards: float) -> void:
+	play_history.append({
+		"play_id": pid,
+		"possession": possession_team,
+		"down": down_number,
+		"los": line_of_scrimmage,
+		"first_down": first_down_line,
+		"direction": get_attacking_direction(),
+		"ball": ball_position_yards,
+		"final": final_yards,
+		"reason": reason,
+		"start": play_started_at,
+	})
+
 
 func debug_lines() -> String:
 	return "\n".join(PackedStringArray([
-		"STATE: " + State.keys()[match_state],
+		"PLAY: %03d   STATE: %s" % [play_id, State.keys()[match_state]],
 		"OFFENSE: " + possession_team.to_upper() + "   DEFENSE: " + get_defense_team().to_upper(),
 		"DOWN: %d   YARDS TO GO: %d" % [down_number, get_yards_to_go()],
 		"BALL: %.1f   LOS: %.1f   FIRST DOWN: %.1f" % [ball_position_yards, line_of_scrimmage, first_down_line],
