@@ -984,6 +984,9 @@ func _begin_run_after_catch(receiver: PlayerActor) -> void:
 # =============================================================================
 
 func _begin_interception(defender: PlayerActor) -> void:
+	# 抄截必须通知规则引擎换权（否则攻防不转换）
+	if _game != null:
+		_game.process_interception()
 	_defense_possession = true
 	_carrier = defender
 	_chasing.clear()

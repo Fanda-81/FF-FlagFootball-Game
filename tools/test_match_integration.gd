@@ -327,8 +327,25 @@ func _initialize() -> void:
 	_check(is_equal_approx(g.field_yards_to_world(69.0), 59.0), "边界3 yards69 → z59（实际 %.2f）" % g.field_yards_to_world(69.0))
 	_check(is_equal_approx(g.field_yards_to_world(2.0), -8.0), "边界4 yards2 → z-8（实际 %.2f）" % g.field_yards_to_world(2.0))
 
+
+	# ===== 四档失败：新进攻方从本方 5 码线开始 =====
+	g.reset_match(); g.debug_setup("red", 55.0, 4)
+	g.start_play(); g.end_play("INCOMPLETE_PASS", 55.0)
+	_check(g.possession_team == "blue", "换权1 应换蓝方（实际 %s）" % g.possession_team)
+	_check(is_equal_approx(g.line_of_scrimmage, 15.0), "换权1 蓝方应从本方 5 码线 15 开始（实际 %.1f）" % g.line_of_scrimmage)
+	g.reset_match(); g.debug_setup("blue", 30.0, 4)
+	g.start_play(); g.end_play("INCOMPLETE_PASS", 30.0)
+	_check(g.possession_team == "red", "换权2 应换红方（实际 %s）" % g.possession_team)
+	_check(is_equal_approx(g.line_of_scrimmage, 55.0), "换权2 红方应从本方 5 码线 55 开始（实际 %.1f）" % g.line_of_scrimmage)
+
+	# ===== 抄截：球权必须翻转 =====
+	g.reset_match(); g.debug_setup("blue", 40.0, 1)
+	g.start_play(); g.end_play("INTERCEPTION", 40.0)
+	_check(g.possession_team == "red", "抄截 应换红方（实际 %s）" % g.possession_team)
+	_check(g.match_state == GameManager.State.RETURN_IN_PROGRESS, "抄截 应进入回攻状态（实际 %s）" % g.match_state)
+
 	if fails.is_empty():
-		print("[test_lifecycle] OK  生命周期+回攻+达阵+端区+Safety+码数/状态/边界 共 80 项通过")
+		print("[test_lifecycle] OK  80 项 + 换权重启/抄截 6 项 共 86 项通过")
 		quit(0)
 	else:
 		for m in fails:

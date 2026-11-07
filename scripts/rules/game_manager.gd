@@ -389,8 +389,12 @@ func change_possession(reason: String, turnover_yards: float) -> void:
 	last_turnover_reason = reason
 	series_turnover_reason = reason
 	down_number = 1
-	ball_position_yards = clampf(turnover_yards, 0.0, FIELD_LENGTH)
-	line_of_scrimmage = ball_position_yards
+	var spot := clampf(turnover_yards, 0.0, FIELD_LENGTH)
+	# 四档失败：新进攻方从本方 5 码线重新开球（不再原地换权）
+	if reason == "TURNOVER_ON_DOWNS":
+		spot = 15.0 if possession_team == "blue" else 55.0
+	ball_position_yards = spot
+	line_of_scrimmage = spot
 	first_down_line = target_line_for(possession_team, line_of_scrimmage)
 	phase = 1 if is_equal_approx(first_down_line, MIDFIELD) else 2
 	_log("[PLAY %03d] POSSESSION -> %s (%s) AT %.1f TARGET %.1f" % [
