@@ -110,6 +110,12 @@ var _lineup_timer := 0.0
 var _series_count := 0
 var _td_celebrating := false
 var _td_timer := 0.0
+## 比分（达阵 +6）
+var _score_blue := 0
+var _score_red := 0
+var _score_label: Label
+var _score_board_left: Label3D
+var _score_board_right: Label3D
 var _play_buttons: Dictionary = {}
 var _play_grid: Control
 var _play_label: Label
@@ -295,6 +301,59 @@ const SIDE_FIELD_X := 62.0
 const GROUND_SIZE := 620.0
 
 
+
+# =============================================================================
+# 记分牌
+# =============================================================================
+
+func _build_scoreboard() -> void:
+	var board := MeshInstance3D.new()
+	board.name = "Scoreboard"
+	var box := BoxMesh.new()
+	box.size = Vector3(9.0, 3.2, 0.35)
+	board.mesh = box
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color("11151d")
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	board.material_override = mat
+	board.position = Vector3(-19.5, 5.0, 25.0)
+	add_child(board)
+
+	_score_board_left = Label3D.new()
+	_score_board_left.text = "蓝 0"
+	_score_board_left.font_size = 96
+	_score_board_left.pixel_size = 0.012
+	_score_board_left.modulate = Color("5aa9ff")
+	_score_board_left.position = Vector3(-19.4, 5.2, 22.6)
+	_score_board_left.rotation.y = PI * 0.5
+	add_child(_score_board_left)
+
+	_score_board_right = Label3D.new()
+	_score_board_right.text = "红 0"
+	_score_board_right.font_size = 96
+	_score_board_right.pixel_size = 0.012
+	_score_board_right.modulate = Color("ff6b5e")
+	_score_board_right.position = Vector3(-19.4, 5.2, 27.4)
+	_score_board_right.rotation.y = PI * 0.5
+	add_child(_score_board_right)
+
+
+func _add_score(team: String) -> void:
+	if team == "blue":
+		_score_blue += 6
+	else:
+		_score_red += 6
+	_refresh_score()
+
+
+func _refresh_score() -> void:
+	if _score_label != null:
+		_score_label.text = "蓝 %d : %d 红" % [_score_blue, _score_red]
+	if _score_board_left != null:
+		_score_board_left.text = "蓝 %d" % _score_blue
+	if _score_board_right != null:
+		_score_board_right.text = "红 %d" % _score_red
+
 func _build_surrounding_fields() -> void:
 	# 1) 一张超大的草地，把"天空"挡在地平线以外
 	var ground := MeshInstance3D.new()
@@ -377,6 +436,7 @@ func _build_environment() -> void:
 	add_child(world_environment)
 
 	_build_surrounding_fields()
+	_build_scoreboard()
 	_build_sky_dome()
 
 	var sun := DirectionalLight3D.new()
@@ -892,6 +952,7 @@ func _advance_return(delta: float) -> void:
 	# 防守方达阵（进攻方那一侧端区）
 	if _carrier.global_position.z * _attack_dir <= -5.0:
 		_touchdowns += 1
+		_add_score("blue" if _offense_side == "red" else "red")
 		_show_touchdown()
 		_td_timer = TOUCHDOWN_SECONDS
 		_td_celebrating = true
@@ -979,6 +1040,7 @@ func _advance_run(delta: float) -> void:
 		_td_celebrating = true
 		_td_timer = TOUCHDOWN_SECONDS
 		_touchdowns += 1
+		_add_score(_offense_side)
 		_clock_running = false
 		_show_touchdown()
 		for player in _receivers:
@@ -1115,6 +1177,19 @@ func _build_hud() -> void:
 	_goal_label.add_theme_font_size_override("font_size", 18)
 	_goal_label.add_theme_color_override("font_color", Color("9fb3cd"))
 	state_column.add_child(_goal_label)
+
+	_score_label = Label.new()
+	_score_label.name = "ScoreLabel"
+	_score_label.text = "蓝 0 : 0 红"
+	_score_label.add_theme_font_size_override("font_size", 26)
+	_score_label.add_theme_color_override("font_color", Color("ffe27a"))
+	root.add_child(_score_label)
+	_score_label.anchor_left = 0.0
+	_score_label.anchor_top = 0.0
+	_score_label.offset_left = MARGIN + 244.0
+	_score_label.offset_top = MARGIN + 6.0
+	_score_label.offset_right = MARGIN + 520.0
+	_score_label.offset_bottom = MARGIN + 46.0
 
 	_clock_label = Label.new()
 	_clock_label.name = "ClockLabel"
@@ -1282,7 +1357,7 @@ func _build_touchdown_overlay(root: Control) -> void:
 	_confetti.spread = 180.0
 	_confetti.initial_velocity_min = 300.0
 	_confetti.initial_velocity_max = 780.0
-	_confetti.gravity = Vector2(0.0, 1150.0)
+	_confetti.gravity = Vector2(0.0, 430.0)
 	_confetti.scale_amount_min = 2.5
 	_confetti.scale_amount_max = 6.5
 	# 每个粒子从这条渐变里随机取一个颜色 → 各种颜色的彩带
