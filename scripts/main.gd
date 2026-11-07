@@ -19,7 +19,7 @@ const ACTOR_SCENE := preload("res://scenes/player_actor.tscn")
 const FOOTBALL_SCENE := preload("res://scenes/football.tscn")
 const PASS_TUNING := preload("res://scripts/pass_tuning.gd")
 
-enum Phase { PRE_SNAP, SNAP, PLAY, FLIGHT, RUN, RESULT, TOUCHDOWN, LINEUP }
+enum Phase { PRE_SNAP, SNAP, PLAY, FLIGHT, RUN, RESULT, TOUCHDOWN, LINEUP, HUDDLE }
 enum ThrowMode { FLAT, HIGH, ABORT }
 enum CatchBand { LOW, CHEST, HIGH }
 
@@ -657,12 +657,11 @@ func _begin_snap() -> void:
 	# 开球时把上一档被拔掉的腰旗恢复
 	for slot in _actors:
 		(_actors[slot] as PlayerActor).reset_flags()
+	if _game != null and _game.match_state != GameManager.State.READY_TO_SNAP:
+		return
 	_phase = Phase.SNAP
 	_snap_elapsed = 0.0
 	if _game != null:
-		# 死球/结果阶段不允许开球，防止死球后重复提交事件
-		if _game.match_state != GameManager.State.READY_TO_SNAP:
-			return
 		_game.start_play()
 	_holder = _center
 	_qb_snap_origin = _qb.global_position
@@ -1724,6 +1723,10 @@ func _physics_process(delta: float) -> void:
 			if bool(_ball.get("landed")) and not _physics_started:
 				_physics_started = true
 				_start_bounce()
+		Phase.HUDDLE:
+			for actor in _actors.values():
+				(actor as PlayerActor).set_move_input(Vector3.ZERO)
+			_attach_ball(_center)
 		Phase.LINEUP:
 			_advance_lineup(delta)
 		Phase.RUN:
@@ -1757,6 +1760,10 @@ func _finish_reset() -> void:
 		_result_label.visible = false
 	_hide_touchdown()
 	_begin_series(_next_los, _next_down)
+	# 阶段 A：每档结束后进入 Huddle（玩家选战术后才列阵）
+	if _series_count > 1 and _game != null and _game.match_state == GameManager.State.READY_TO_SNAP:
+		_phase = Phase.HUDDLE
+		_open_huddle()
 	if _turnover:
 		_show_toast("4 档未过，换攻", Color("ffb27a"))
 		_turnover = false
@@ -2379,11 +2386,23 @@ func _at_boundary(position: Vector3) -> bool:
 		or position.z <= FIELD_MIN_Z + 0.8 or position.z >= FIELD_MAX_Z - 0.8)
 
 
+## 进入 Huddle：双方停住，弹出战术板
+func _open_huddle() -> void:
+	for actor in _actors.values():
+		(actor as PlayerActor).set_move_input(Vector3.ZERO)
+	_attach_ball(_center)
+	_show_toast("选择战术后列阵", Color("9fd2ff"))
+	debug_open_play_drawer()
+
+
 func _select_play(play_id: String) -> void:
 	_current_play = play_id
-	if _phase == Phase.PRE_SNAP:
+	if _phase == Phase.PRE_SNAP or _phase == Phase.HUDDLE:
 		_build_routes()
 		_reset_free_state()
+	if _phase == Phase.HUDDLE:
+		_phase = Phase.LINEUP
+		_lineup_timer = 2.5
 	_refresh_play_buttons()
 	_refresh_route_preview()
 	_show_toast("战术：%s" % Playbook.play_name(play_id), Color("9fd2ff"))
