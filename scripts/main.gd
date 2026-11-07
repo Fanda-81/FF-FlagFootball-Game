@@ -108,6 +108,8 @@ var _pending_swap := false
 var _handoff_done := false
 ## PLAY 阶段计时，用于跑球战术的交接球时机
 var _play_elapsed := 0.0
+## Huddle 超时兜底（防止战术板没弹出导致卡死）
+var _huddle_timer := 0.0
 ## 列阵：目标位置 + 计时
 var _lineup_targets: Dictionary = {}
 var _lineup_timer := 0.0
@@ -654,6 +656,12 @@ func _on_snap_pressed() -> void:
 
 
 func _begin_snap() -> void:
+	if _phase == Phase.HUDDLE:
+		# Huddle 里直接点开球：采用当前战术并立即到位
+		for slot in _lineup_targets:
+			(_actors[slot] as PlayerActor).global_position = _lineup_targets[slot]
+		_huddle_timer = 0.0
+		_phase = Phase.LINEUP
 	# 中锋背对四分卫做开球动作（0.5 秒窗口内播完）
 	if _center != null:
 		_center.play_one_shot("snap", SNAP_SECONDS)
@@ -1759,6 +1767,12 @@ func _physics_process(delta: float) -> void:
 			for actor in _actors.values():
 				(actor as PlayerActor).set_move_input(Vector3.ZERO)
 			_attach_ball(_center)
+			# 兜底：8 秒内没有选战术就自动采用当前战术并列阵
+			_huddle_timer += delta
+			if _huddle_timer >= 8.0:
+				_huddle_timer = 0.0
+				_phase = Phase.LINEUP
+				_lineup_timer = 2.5
 		Phase.LINEUP:
 			_advance_lineup(delta)
 		Phase.RUN:
@@ -2420,6 +2434,7 @@ func _at_boundary(position: Vector3) -> bool:
 
 ## 进入 Huddle：双方停住，弹出战术板
 func _open_huddle() -> void:
+	_huddle_timer = 0.0
 	for actor in _actors.values():
 		(actor as PlayerActor).set_move_input(Vector3.ZERO)
 	_attach_ball(_center)
