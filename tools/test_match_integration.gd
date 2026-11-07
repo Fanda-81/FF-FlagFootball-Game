@@ -281,7 +281,7 @@ func _initialize() -> void:
 	g.reset_match(); g.debug_setup("red", 12.0, 1)
 	g.start_play(); g.end_play("TOUCHDOWN", 6.5)
 	_check(g.score_red == 6 and g.extra_point_pending, "D 红队 +6 并进入附加分")
-	g.start_play(); g.end_play("INCOMPLETE_PASS", 5.0)
+	g.start_play(); g.end_play("INCOMPLETE_PASS", 15.0)
 	_check(is_equal_approx(g.line_of_scrimmage, 15.0), "D 蓝队应从 15 开始（实际 %.1f）" % g.line_of_scrimmage)
 
 	# E 截球回攻在蓝方端区被拔旗 → 不判 Safety、不 Touchback、保留位置
@@ -369,6 +369,12 @@ func _initialize() -> void:
 	_check(g.score_blue == 6, "附加3 附加分失败只保留 6 分（实际 %d）" % g.score_blue)
 	_check(g.possession_team == "red", "附加3 之后应换红方")
 	_check(is_equal_approx(g.line_of_scrimmage, 55.0), "附加3 红方从本方 5 码线开始（实际 %.1f）" % g.line_of_scrimmage)
+
+	# 红方附加分位置（对方 5 码线 = 15）
+	g.reset_match(); g.debug_setup("red", 12.0, 1)
+	g.start_play(); g.end_play("TOUCHDOWN", 6.5)
+	_check(is_equal_approx(g.line_of_scrimmage, 15.0), "附加4 红方应从 15 尝试（实际 %.1f）" % g.line_of_scrimmage)
+	_check(g.get_yards_to_go() == 5, "附加4 距达阵线应为 5 码（实际 %d）" % g.get_yards_to_go())
 
 	if fails.is_empty():
 		print("[test_lifecycle] OK  86 项 + 附加分 11 项 共 97 项通过")

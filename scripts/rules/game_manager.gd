@@ -343,7 +343,9 @@ func process_touchdown() -> bool:
 ## 达阵后：得分方从对方 5 码线尝试一次附加分
 func _start_extra_point(team: String) -> void:
 	possession_team = team
-	line_of_scrimmage = 55.0 if team == "blue" else 5.0
+	# 附加分位置 = 对方达阵线往场内 5 码：
+	# 蓝方打红方（60）→ 55 ；红方打蓝方（10）→ 15
+	line_of_scrimmage = 55.0 if team == "blue" else 15.0
 	ball_position_yards = line_of_scrimmage
 	down_number = 1
 	phase = 2
