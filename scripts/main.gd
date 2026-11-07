@@ -2438,8 +2438,9 @@ func _open_huddle() -> void:
 	for actor in _actors.values():
 		(actor as PlayerActor).set_move_input(Vector3.ZERO)
 	_attach_ball(_center)
-	_show_toast("选择战术后列阵", Color("9fd2ff"))
-	debug_open_play_drawer()
+	_show_toast("选择战术后列阵（点开球可直接开球）", Color("9fd2ff"))
+	# 不再自动展开战术板：抽屉面板可能吞掉点击事件，导致开球按钮失效（软死锁）
+	# 玩家可用左下角「战术板」手动打开
 
 
 func _select_play(play_id: String) -> void:
