@@ -309,10 +309,9 @@ func _build_surrounding_fields() -> void:
 	ground.position = Vector3(0.0, -0.04, 25.0)
 	add_child(ground)
 
-	# 2) 左右各两块空球场（只有地面和线，没有球员看台）
-	for side in [-1.0, 1.0]:
-		for offset in [-1.0, 1.0]:
-			_build_empty_field(Vector3(side * SIDE_FIELD_X, 0.0, 25.0 + offset * 78.0))
+	# 2) 主场上方、下方各一块空球场，和主场排成一列
+	_build_empty_field(Vector3(0.0, 0.0, 25.0 + 74.0))
+	_build_empty_field(Vector3(0.0, 0.0, 25.0 - 74.0))
 
 
 func _build_empty_field(center: Vector3) -> void:
@@ -906,6 +905,8 @@ func _advance_return(delta: float) -> void:
 			_next_los = START_LOS
 			_next_down = 1
 			_turnover = false
+			# 达阵后换球权，攻防继续轮换
+			_pending_swap = true
 			_finish_reset()
 		return
 	if closest <= FLAG_PULL_RADIUS:
