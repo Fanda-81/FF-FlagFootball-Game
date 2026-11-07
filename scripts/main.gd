@@ -626,6 +626,9 @@ func _begin_series(los: float, down: int) -> void:
 	_attach_ball(_center)
 	_series_count += 1
 	_lineup_timer = 2.5
+	_game.offense = _offense_side
+	_game.attack_dir = float(_attack_dir)
+	_game.begin_series(_game.z_to_yards(_los_z, _game.attack_dir), _down)
 	_phase = Phase.PRE_SNAP if _series_count <= 1 else Phase.LINEUP
 	_refresh_route_preview()
 	_play_clock = PRE_SNAP_CLOCK
@@ -1028,6 +1031,8 @@ func _advance_return(delta: float) -> void:
 		# 防守方（非当前进攻方）得分
 		var scorer := "blue" if _offense_side == "red" else "red"
 		_add_score(scorer)
+		if _game != null:
+			_game.on_touchdown(scorer)
 		if scorer == _offense_side:
 			_pending_swap = true
 		_show_touchdown()
@@ -1116,6 +1121,8 @@ func _advance_run(delta: float) -> void:
 		_td_timer = TOUCHDOWN_SECONDS
 		_touchdowns += 1
 		_add_score(_offense_side)
+		if _game != null:
+			_game.on_touchdown(_offense_side)
 		_pending_swap = true
 		_clock_running = false
 		_show_touchdown()
@@ -1193,6 +1200,14 @@ func _end_down(spot: float, reason: String) -> void:
 		next_los = START_LOS
 		next_down = 1
 		turnover = true
+	# 交给规则引擎算下一档（4 档过中场 → 新 4 档；否则档数 +1；四档不过转球权）
+	if _game != null:
+		var verdict: Dictionary = _game.end_play(reason, spot)
+		next_los = _game.yards_to_z(float(verdict["los"]), _game.attack_dir)
+		next_down = int(verdict["down"])
+		if bool(verdict["turnover"]):
+			turnover = true
+			_pending_swap = true
 	_next_los = next_los
 	_next_down = next_down
 	_turnover = turnover
