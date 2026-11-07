@@ -329,6 +329,10 @@ func _begin_series(los: float, down: int) -> void:
 		_pending_swap = false
 		_swapped = not _swapped
 		_attack_dir = -1 if _swapped else 1
+		if camera != null:
+			camera.set_flipped(_swapped)
+		if stadium != null:
+			stadium.set_flipped(_swapped)
 	_los_z = clampf(los, START_LOS, FIELD_MAX_Z - 12.0)
 	_down = down
 	_first_down_z = minf(_los_z + FIRST_DOWN_YARDS, FIELD_MAX_Z)

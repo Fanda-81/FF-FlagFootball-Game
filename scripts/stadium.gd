@@ -50,6 +50,8 @@ const MIDFIELD_Z := FIELD_LENGTH * 0.5
 
 # --- 运行时状态 ---------------------------------------------------------------
 var los_line: MeshInstance3D
+## 场地上的文字（END ZONE / 码线数字），攻防转换时整体镜像
+var _text_labels: Array[Label3D] = []
 var pylons: Array[Dictionary] = []
 var _seated_crowd: Array[Node3D] = []
 var _standing_crowd: Array[Node3D] = []
@@ -144,6 +146,13 @@ func _mesh_plane(size: Vector2, position: Vector3, material: Material) -> MeshIn
 # 对照 FFSIMU _build_field()（第 441-604 行）
 # =============================================================================
 
+## 攻防转换：场地文字整体镜像，抵消相机 180° 造成的左右翻转
+func set_flipped(value: bool) -> void:
+	for label in _text_labels:
+		if label != null and is_instance_valid(label):
+			label.scale.x = -1.0 if value else 1.0
+
+
 func _build_field() -> void:
 	# 外围改为深绿色草地（明显暗于场内草皮）；看台正下方仍保留棕色泥地。
 	var outer_grass := _material(OUTER_GRASS_COLOR)
@@ -177,6 +186,7 @@ func _build_field() -> void:
 		endzone.position = Vector3(0, 0.012, endzone_z)
 		add_child(endzone)
 		var watermark := Label3D.new()
+		_text_labels.append(watermark)
 		watermark.text = "END ZONE"
 		watermark.font_size = 104
 		watermark.pixel_size = 0.018
@@ -196,6 +206,7 @@ func _build_field() -> void:
 			var digits := str(yard_mark["text"])
 			for digit_index in digits.length():
 				var number := Label3D.new()
+				_text_labels.append(number)
 				number.text = digits[digit_index]
 				number.font_size = 118
 				number.pixel_size = 0.012

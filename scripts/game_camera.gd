@@ -65,6 +65,8 @@ var _size_current: float
 var _zoom_target: float
 var _zoom_current: float
 var _pan_offset := Vector3.ZERO
+## 攻防转换时把俯视画面整体转 180°（屏幕上方永远是进攻方向）
+var flipped := false
 var _panning := false
 
 var _touches: Dictionary = {}
@@ -136,6 +138,9 @@ func _apply_transform() -> void:
 		position = Vector3(_focus_current.x, 60.0, _focus_current.z)
 		# 正下方目标 + up=+Z：屏幕右 = -X、屏幕上 = +Z，且不会万向节翻转。
 		look_at(Vector3(_focus_current.x, 0.0, _focus_current.z), Vector3(0.0, 0.0, 1.0))
+		if flipped:
+			# 绕视线轴滚转 180°，图像上下左右整体翻转
+			rotate_object_local(Vector3(0, 0, -1), PI)
 	else:
 		var direction := SPECTATOR_DIR.normalized()
 		position = _focus_current + direction * (spectator_base_distance * _zoom_current)
@@ -314,6 +319,10 @@ func set_view_mode(next: ViewMode) -> void:
 	_focus_current = _focus_target
 	_apply_projection()
 	_apply_transform()
+
+
+func set_flipped(value: bool) -> void:
+	flipped = value
 
 
 func toggle_view_mode() -> void:
