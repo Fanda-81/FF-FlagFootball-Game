@@ -901,7 +901,11 @@ func _start_bounce() -> void:
 	var velocity: Vector3 = _ball.get("flight_velocity")
 	_ball.call("begin_physics", velocity * 0.85)
 	if _phase == Phase.FLIGHT:
-		_show_result(_pending_result if _pending_result != "" else "球落地")
+		# 统一事件入口：未完成传球交给规则引擎（档数 +1、球回开球线、不换权）
+		if _ball_mode != ThrowMode.ABORT:
+			_end_down(_los_z, "传球未完成")
+			return
+		_show_result("弃球")
 		_phase = Phase.RESULT
 		_result_timer = RESULT_HOLD_SECONDS
 
@@ -964,7 +968,9 @@ func _advance_return(delta: float) -> void:
 		return
 	_clamp_defenders()
 	# 往进攻方那一侧的端区跑（z 负方向）
-	var goal := Vector3(_carrier.global_position.x * 0.6, 0.0, -7.0 * _attack_dir)
+	var return_dir := -_attack_dir
+	var goal_z := 55.0 if return_dir > 0 else -5.0
+	var goal := Vector3(_carrier.global_position.x * 0.6, 0.0, goal_z)
 	var to_goal := goal - _carrier.global_position
 	to_goal.y = 0.0
 	if to_goal.length() > 0.4:
@@ -995,13 +1001,15 @@ func _advance_return(delta: float) -> void:
 	_attach_ball(_carrier)
 
 	# 防守方达阵（进攻方那一侧端区）
-	if not _td_celebrating and _carrier.global_position.z * _attack_dir <= -5.0:
+	var return_yards := _game.world_to_field_yards(_carrier.global_position.z)
+	var return_team := _game.get_defense_team()
+	if not _td_celebrating and _game.is_opponent_endzone(return_team, return_yards):
 		_touchdowns += 1
 		# 防守方（非当前进攻方）得分
 		var scorer := "blue" if _offense_side == "red" else "red"
 		_add_score(scorer)
 		if _game != null:
-			_game.on_touchdown(scorer)
+			_game.process_touchdown()
 		if scorer == _offense_side:
 			_pending_swap = true
 		_show_touchdown()
@@ -1057,7 +1065,8 @@ func _advance_run(delta: float) -> void:
 	if _carrier == null:
 		return
 	# 接球人朝达阵区跑；防守全力追。
-	var goal := Vector3(_carrier.global_position.x * 0.6, 0.0, (TOUCHDOWN_Z + 2.0) * _attack_dir)
+	var goal_z := 55.0 if _attack_dir > 0 else -5.0
+	var goal := Vector3(_carrier.global_position.x * 0.6, 0.0, goal_z)
 	var to_goal := goal - _carrier.global_position
 	to_goal.y = 0.0
 	if to_goal.length() > 0.4:
@@ -1082,13 +1091,14 @@ func _advance_run(delta: float) -> void:
 	_attach_ball(_carrier)
 
 	# 进入端区立刻放庆祝动画，但人继续往端区里跑
-	if not _td_celebrating and _carrier.global_position.z * _attack_dir >= TD_ZONE_START:
+	var carrier_yards := _game.world_to_field_yards(_carrier.global_position.z)
+	if not _td_celebrating and _game.is_opponent_endzone(_game.possession_team, carrier_yards):
 		_td_celebrating = true
 		_td_timer = TOUCHDOWN_SECONDS
 		_touchdowns += 1
 		_add_score(_offense_side)
 		if _game != null:
-			_game.on_touchdown(_offense_side)
+			_game.process_touchdown()
 		_pending_swap = true
 		_clock_running = false
 		_show_touchdown()
@@ -1098,7 +1108,8 @@ func _advance_run(delta: float) -> void:
 			defender.set_move_input(Vector3.ZERO)
 	if _td_celebrating:
 		_td_timer -= delta
-		if _carrier.global_position.z * _attack_dir >= TD_STOP_Z:
+		var stop_z := 55.0 if _attack_dir > 0 else -5.0
+		if (stop_z - _carrier.global_position.z) * _attack_dir <= 0.0:
 			_carrier.set_move_input(Vector3.ZERO)
 		if _td_timer <= 0.0:
 			_td_celebrating = false
@@ -1114,12 +1125,12 @@ func _advance_run(delta: float) -> void:
 		_carrier.pull_flags(mode)
 		var side: String = ["左侧", "右侧", "两侧"][mode]
 		_show_toast("腰旗被拔掉（%s）" % side, Color("ffb27a"))
-		_end_down(clampf(_carrier.global_position.z, START_LOS, FIELD_MAX_Z - 2.0), "被拔旗")
+		_end_down(clampf(_carrier.global_position.z, FIELD_MIN_Z + 0.5, FIELD_MAX_Z - 0.5), "被拔旗")
 		return
 	# 兜底：跑太久也算死球
 	_result_timer += delta
 	if _result_timer > 12.0:
-		_end_down(clampf(_carrier.global_position.z, START_LOS, FIELD_MAX_Z - 2.0), "死球")
+		_end_down(clampf(_carrier.global_position.z, FIELD_MIN_Z + 0.5, FIELD_MAX_Z - 0.5), "死球")
 
 
 func _trigger_touchdown() -> void:

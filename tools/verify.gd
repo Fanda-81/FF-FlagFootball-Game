@@ -427,7 +427,8 @@ func _check_idle_actor() -> void:
 	var drift: float = Vector2(
 		_idle_actor.global_position.x - _actor_start.x,
 		_idle_actor.global_position.z - _actor_start.z).length()
-	if drift > 0.15:
+	# 列阵阶段（phase 7）球员本来就在慢跑，不算漂移
+	if drift > 0.15 and int(_main.get("_phase")) != 7:
 		_failures.append("球员在没有输入时移动了 %.2f m" % drift)
 	if _idle_actor.global_position.y < -0.2:
 		_failures.append("球员掉到地面以下：y=%.2f" % _idle_actor.global_position.y)
