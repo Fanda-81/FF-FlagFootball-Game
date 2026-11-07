@@ -751,6 +751,8 @@ func _advance_return(delta: float) -> void:
 			chaser.set_move_input(Vector3.ZERO)
 		closest = minf(closest, to_carrier.length())
 	for other in _defenders:
+		if other == _carrier:
+			continue
 		if not _chasing.has(other):
 			other.set_move_input(Vector3.ZERO)
 	for receiver in _receivers:
