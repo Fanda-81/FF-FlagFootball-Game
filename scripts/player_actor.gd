@@ -23,7 +23,7 @@ class_name PlayerActor
 
 signal became_active
 
-const CHARACTER_SCENE := preload("res://assets/models/characters/FFfemale.glb")
+const CHARACTER_SCENE := preload("res://assets/models/characters/morra.glb")
 ## FFSIMU 里的站立动作（静止站立.fbx），重定向到本角色骨架上。
 const IDLE_PATH := "res://assets/models/characters/Idle.glb"
 ## 角色归一化后的身高（米）。
@@ -197,6 +197,51 @@ func _setup_outfit(model: Node3D) -> void:
 			if item_id != "":
 				_outfit.set_item_color(category, item_id, 0, jersey_color)
 
+
+
+## 拔旗：mode 0=左 1=右 2=两边
+func pull_flags(mode: int) -> void:
+	if _outfit == null:
+		return
+	var targets: Array = []
+	match mode:
+		0:
+			targets = ["左侧腰旗"]
+		1:
+			targets = ["右侧腰旗"]
+		_:
+			targets = ["左侧腰旗", "右侧腰旗"]
+	for mesh_name in targets:
+		var mesh := _outfit.mesh_node(String(mesh_name))
+		if mesh != null:
+			mesh.visible = false
+
+
+## 衣柜里"聚焦某个部位"用的相机高度
+func focus_height(category: String) -> float:
+	match category:
+		"shoe_l", "shoe_r":
+			return 0.15
+		"socks":
+			return 0.45
+		"pants", "flag":
+			return 0.95
+		"shirt", "accessory", "skin":
+			return 1.25
+		"hair":
+			return 1.62
+		_:
+			return 0.95
+
+
+## 应用名单里的个人主色（球衣/短裤/球袜）
+func apply_roster_tint(color: Color) -> void:
+	if _outfit == null:
+		return
+	for category in ["shirt", "pants", "socks"]:
+		var item_id := _outfit.equipped_id(category)
+		if item_id != "":
+			_outfit.set_item_color(category, item_id, 0, color)
 
 func outfit() -> OutfitManager:
 	return _outfit

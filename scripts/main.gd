@@ -297,6 +297,8 @@ func _spawn_teams() -> void:
 		actor.jersey_color = OFFENSE_COLOR if offense else DEFENSE_COLOR
 		actor.max_speed = float(spec["speed"])
 		actor.personal_outfit = offense
+		# 名单里的名字和主色
+		actor.actor_name = Roster.player_name(slot)
 		actor.rotation.y = 0.0 if offense else PI
 		add_child(actor)
 		_actors[slot] = actor
@@ -331,6 +333,7 @@ func _begin_series(los: float, down: int) -> void:
 		actor.set_move_input(Vector3.ZERO)
 		actor.rotation.y = 0.0 if String(spec["side"]) == "offense" else PI
 		actor.set_active(false)
+		actor.apply_roster_tint(Roster.player_tint(slot))
 	stadium.set_line_of_scrimmage(_los_z)
 
 	_build_routes()
@@ -715,6 +718,11 @@ func _advance_run(delta: float) -> void:
 			_finish_reset()
 		return
 	if closest <= FLAG_PULL_RADIUS:
+		# 随机拔掉左 / 右 / 两边的腰旗，拔掉的就隐藏
+		var mode := randi() % 3
+		_carrier.pull_flags(mode)
+		var side: String = ["左侧", "右侧", "两侧"][mode]
+		_show_toast("腰旗被拔掉（%s）" % side, Color("ffb27a"))
 		_end_down(clampf(_carrier.global_position.z, START_LOS, FIELD_MAX_Z - 2.0), "被拔旗")
 		return
 	# 兜底：跑太久也算死球

@@ -440,8 +440,8 @@ func _check_character_rig() -> void:
 	if skeleton == null:
 		_failures.append("球员模型里没有 Skeleton3D")
 		return
-	if skeleton.get_bone_count() != 22:
-		_failures.append("骨骼数 %d（FFfemale 应为 22）" % skeleton.get_bone_count())
+	if skeleton.get_bone_count() != 25:
+		_failures.append("骨骼数 %d（morra 应为 25）" % skeleton.get_bone_count())
 	if skeleton.find_bone("mixamorig_Hips") < 0:
 		_failures.append("骨架里没有 mixamorig_Hips")
 

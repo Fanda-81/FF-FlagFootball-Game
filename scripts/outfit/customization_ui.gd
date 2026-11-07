@@ -41,6 +41,7 @@ var _status_label: Label
 var _current_category := "shirt"
 
 var _dragging := false
+var _roster_panel: PanelContainer
 
 
 func _ready() -> void:
@@ -146,7 +147,7 @@ func _build_preview() -> void:
 
 
 func _update_camera() -> void:
-	var target := Vector3(0.0, 0.95, 0.0)
+	var target := Vector3(0.0, _focus_y, 0.0)
 	_camera.position = target + Vector3(0.0, 0.35, _camera_distance)
 	_camera.look_at(target, Vector3.UP)
 
@@ -193,8 +194,8 @@ func _build_layout() -> void:
 	category_row.add_theme_constant_override("separation", 8)
 	add_child(category_row)
 
-	for category_id in OutfitCatalog.category_ids():
-		var button := _make_button(OutfitCatalog.category_label(category_id), 22)
+	for category_id in (["full"] + OutfitCatalog.category_ids()):
+		var button := _make_button(OutfitCatalog.category_label(String(category_id)), 22)
 		button.custom_minimum_size = Vector2(0, 58)
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.pressed.connect(_select_category.bind(String(category_id)))
@@ -277,6 +278,12 @@ func _build_layout() -> void:
 	default_button.pressed.connect(_on_reset_outfit)
 	bottom_row.add_child(default_button)
 
+	var roster_button := _make_button("球员名单", 20)
+	roster_button.custom_minimum_size = Vector2(0, 74)
+	roster_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	roster_button.pressed.connect(_toggle_roster_panel)
+	bottom_row.add_child(roster_button)
+
 	var close_button := _make_button("退出", 22)
 	close_button.custom_minimum_size = Vector2(150, 74)
 	close_button.pressed.connect(_on_close)
@@ -286,6 +293,91 @@ func _build_layout() -> void:
 	_status_label.position = Vector2(MARGIN, 1130.0)
 	add_child(_status_label)
 
+
+
+## 衣柜聚焦：选哪个部位就把相机拉到那个高度
+var _focus_y := 0.95
+
+
+func _apply_focus(category: String) -> void:
+	var palette := {
+		"full": [0.95, 3.4], "shirt": [1.25, 1.9], "pants": [0.95, 2.0],
+		"shoe_l": [0.16, 1.15], "shoe_r": [0.16, 1.15], "socks": [0.45, 1.35],
+		"flag": [0.95, 1.8], "hair": [1.62, 1.3], "accessory": [1.2, 1.6],
+		"skin": [1.2, 1.9],
+	}
+	var spec: Array = palette.get(category, [0.95, 3.0])
+	_focus_y = float(spec[0])
+	_camera_distance = float(spec[1])
+	_update_camera()
+
+
+## 球员名单编辑：8 个位置，名字 + 主色
+func _build_roster_panel() -> void:
+	_roster_panel = PanelContainer.new()
+	_roster_panel.name = "RosterPanel"
+	_roster_panel.visible = false
+	_roster_panel.anchor_left = 0.0
+	_roster_panel.anchor_top = 0.0
+	_roster_panel.anchor_right = 1.0
+	_roster_panel.anchor_bottom = 1.0
+	_roster_panel.offset_left = 20.0
+	_roster_panel.offset_top = 560.0
+	_roster_panel.offset_right = -20.0
+	_roster_panel.offset_bottom = -120.0
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.06, 0.08, 0.12, 0.98)
+	style.set_corner_radius_all(18)
+	style.set_border_width_all(2)
+	style.border_color = Color(0.28, 0.38, 0.52, 1.0)
+	style.set_content_margin_all(14)
+	_roster_panel.add_theme_stylebox_override("panel", style)
+	add_child(_roster_panel)
+
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 6)
+	_roster_panel.add_child(column)
+
+	var title := _make_label("球员名单（改名 / 主色，自动保存）", 20, Color("dbe4f0"))
+	column.add_child(title)
+
+	for slot in Roster.SLOTS:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		column.add_child(row)
+
+		var tag := _make_label(Roster.slot_label(slot), 17, Color("9fb3cd"))
+		tag.custom_minimum_size = Vector2(120, 0)
+		row.add_child(tag)
+
+		var field := LineEdit.new()
+		field.text = Roster.player_name(slot)
+		field.custom_minimum_size = Vector2(0, 44)
+		field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		field.text_submitted.connect(_on_roster_name.bind(slot))
+		field.focus_exited.connect(func(): _on_roster_name(field.text, slot))
+		row.add_child(field)
+
+		var picker := ColorPickerButton.new()
+		picker.color = Roster.player_tint(slot)
+		picker.custom_minimum_size = Vector2(96, 44)
+		picker.color_changed.connect(_on_roster_color.bind(slot))
+		row.add_child(picker)
+
+	var close := _make_button("关闭名单", 20)
+	close.custom_minimum_size = Vector2(0, 56)
+	close.pressed.connect(func(): _roster_panel.visible = false)
+	column.add_child(close)
+
+
+func _on_roster_name(value: String, slot: String) -> void:
+	Roster.set_player_name(slot, value)
+	Roster.save()
+
+
+func _on_roster_color(color: Color, slot: String) -> void:
+	Roster.set_player_tint(slot, color)
+	Roster.save()
 
 func _make_label(text: String, size: int, color: Color) -> Label:
 	var label := Label.new()
@@ -322,6 +414,7 @@ func _make_button(text: String, size: int) -> Button:
 
 func _select_category(category: String) -> void:
 	_current_category = category
+	_apply_focus(category)
 	for id in _category_buttons:
 		var button: Button = _category_buttons[id]
 		var active := String(id) == category
@@ -432,6 +525,12 @@ func _on_reset_outfit() -> void:
 	_color_picker.color = Color.WHITE
 	_refresh_items()
 	_status_label.text = "已恢复默认穿搭"
+
+
+func _toggle_roster_panel() -> void:
+	if _roster_panel == null:
+		_build_roster_panel()
+	_roster_panel.visible = not _roster_panel.visible
 
 
 func _on_close() -> void:
