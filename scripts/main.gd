@@ -61,7 +61,7 @@ const DEFENDER_SPEED := 5.9
 const FLAG_PULL_RADIUS := 1.3
 const COVER_DEPTH := 1.6
 
-const RESULT_HOLD_SECONDS := 1.6
+const RESULT_HOLD_SECONDS := 0.7
 const TOUCHDOWN_SECONDS := 3.0
 const TRAIL_MAX := 40
 const TRAIL_STEP := 0.07
@@ -603,7 +603,7 @@ func _begin_series(los: float, down: int) -> void:
 	_set_holder(_center)
 	_attach_ball(_center)
 	_series_count += 1
-	_lineup_timer = 2.5
+	_lineup_timer = 1.0
 	# 引擎在本档开始时已经持有启球线/档数，这里只需要同步它到世界坐标（已在上面做过）
 	_phase = Phase.PRE_SNAP if _series_count <= 1 else Phase.LINEUP
 	_refresh_route_preview()
@@ -1733,6 +1733,9 @@ func _show_toast(text: String, color: Color) -> void:
 # =============================================================================
 
 func _physics_process(delta: float) -> void:
+	# 列阵必须自我推进（防止 match 分支缺失导致卡在 LINEUP）
+	if _phase == Phase.LINEUP:
+		_advance_lineup(delta)
 	_sync_debug_state()
 	_update_clock(delta)
 
@@ -1772,7 +1775,7 @@ func _physics_process(delta: float) -> void:
 			if _huddle_timer >= 8.0:
 				_huddle_timer = 0.0
 				_phase = Phase.LINEUP
-				_lineup_timer = 2.5
+				_lineup_timer = 1.0
 		Phase.LINEUP:
 			_advance_lineup(delta)
 		Phase.RUN:
@@ -1806,10 +1809,6 @@ func _finish_reset() -> void:
 		_result_label.visible = false
 	_hide_touchdown()
 	_begin_series(_next_los, _next_down)
-	# 阶段 A：每档结束后进入 Huddle（玩家选战术后才列阵）
-	if _series_count > 1 and _game != null and _game.match_state == GameManager.State.READY_TO_SNAP:
-		_phase = Phase.HUDDLE
-		_open_huddle()
 	if _turnover:
 		_show_toast("4 档未过，换攻", Color("ffb27a"))
 		_turnover = false
@@ -2450,7 +2449,7 @@ func _select_play(play_id: String) -> void:
 		_reset_free_state()
 	if _phase == Phase.HUDDLE:
 		_phase = Phase.LINEUP
-		_lineup_timer = 2.5
+		_lineup_timer = 1.0
 	_refresh_play_buttons()
 	_refresh_route_preview()
 	_show_toast("战术：%s" % Playbook.play_name(play_id), Color("9fd2ff"))
