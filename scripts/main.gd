@@ -539,7 +539,8 @@ func _begin_series(los: float, down: int) -> void:
 		stadium.set_flipped(_swapped)
 	_pending_swap = false
 	_apply_possession()
-	_los_z = clampf(_game.field_yards_to_world(_game.line_of_scrimmage), FIELD_MIN_Z + 2.0, FIELD_MAX_Z - 2.0)
+	# 只在真实球场边界内钳位（-10 ~ 60），不得把端区内的真实位置挪走
+	_los_z = clampf(_game.field_yards_to_world(_game.line_of_scrimmage), FIELD_MIN_Z, FIELD_MAX_Z)
 	_down = _game.down_number
 	_first_down_z = _game.field_yards_to_world(_game.first_down_line)
 	var play_formation: Dictionary = Playbook.get_play(_current_play).get("formation", {})
@@ -1136,7 +1137,7 @@ func _advance_run(delta: float) -> void:
 		_carrier.pull_flags(mode)
 		var side: String = ["左侧", "右侧", "两侧"][mode]
 		_show_toast("腰旗被拔掉（%s）" % side, Color("ffb27a"))
-		_end_down(clampf(_carrier.global_position.z, FIELD_MIN_Z + 0.5, FIELD_MAX_Z - 0.5), "被拔旗")
+		_finish_carrier_play()
 		return
 	# 兜底：跑太久也算死球
 	_result_timer += delta
@@ -1159,6 +1160,16 @@ func _trigger_touchdown() -> void:
 	_next_los = START_LOS
 	_next_down = 1
 	_turnover = false
+
+
+## 普通进攻持球人死球：先判是否在本方端区（Safety），再走普通拔旗
+func _finish_carrier_play() -> void:
+	var z := clampf(_carrier.global_position.z, FIELD_MIN_Z + 0.5, FIELD_MAX_Z - 0.5)
+	var yards := _game.world_to_field_yards(z)
+	if _game.is_own_endzone(_game.possession_team, yards):
+		_end_down(z, "安全分")
+	else:
+		_end_down(z, "被拔旗")
 
 
 func _end_down(spot: float, reason: String) -> void:
@@ -1197,6 +1208,8 @@ func _end_down(spot: float, reason: String) -> void:
 	var event := "FLAG_PULL"
 	if reason == "传球未完成":
 		event = "INCOMPLETE_PASS"
+	elif reason == "安全分":
+		event = "SAFETY"
 	elif reason == "死球":
 		event = "OUT_OF_BOUNDS"
 	_game.end_play(event, _game.world_to_field_yards(spot))
@@ -1492,7 +1505,7 @@ func _refresh_hud() -> void:
 	if _first_down_z >= FIELD_MAX_Z - 0.5:
 		_goal_label.text = "冲向达阵区"
 	else:
-		_goal_label.text = "距首攻 %d 码" % int(maxf(1.0, _first_down_z - _los_z))
+		_goal_label.text = "距首攻 %d 码" % _game.get_yards_to_go()
 	_snap_button.visible = _phase == Phase.PRE_SNAP
 	_snap_button.disabled = _phase != Phase.PRE_SNAP
 	if _play_grid != null:

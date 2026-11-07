@@ -160,7 +160,7 @@ func _initialize() -> void:
 	g.debug_setup("red", 12.0, 1)
 	g.start_play(); g.end_play("FLAG_PULL", 6.5)
 	_check(g.score_red == 6, "C 红队应 +6（实际 %d）" % g.score_red)
-	_check(g.last_event == "TOUCHDOWN", "C 应为达阵事件（实际 %s）" % g.last_event)
+	_check(g.last_turnover_reason == "AFTER_TOUCHDOWN", "C 应记录达阵后重开（实际 %s）" % g.last_turnover_reason)
 
 	# D 蓝队对称：推进到 62 达阵
 	g.start_match(); g.debug_setup("blue", 58.0, 1)
@@ -213,7 +213,7 @@ func _initialize() -> void:
 	# 1 红队 55 → 7.8（对方端区）允许达阵
 	g.debug_setup("red", 55.0, 1)
 	g.start_play(); g.end_play("FLAG_PULL", 7.8)
-	_check(g.score_red == 6 and g.last_event == "TOUCHDOWN", "端区1 红队进对方端区应达阵（score=%d）" % g.score_red)
+	_check(g.score_red == 6 and g.last_turnover_reason == "AFTER_TOUCHDOWN", "端区1 红队进对方端区应达阵（score=%d）" % g.score_red)
 
 	# 2 红队 55 → 60（自己端区）绝不能达阵
 	g.reset_match(); g.debug_setup("red", 55.0, 4)
@@ -224,7 +224,7 @@ func _initialize() -> void:
 	# 3 蓝队 15 → 60.1（对方端区）允许达阵
 	g.reset_match(); g.debug_setup("blue", 15.0, 1)
 	g.start_play(); g.end_play("FLAG_PULL", 60.1)
-	_check(g.score_blue == 6 and g.last_event == "TOUCHDOWN", "端区3 蓝队进对方端区应达阵（score=%d）" % g.score_blue)
+	_check(g.score_blue == 6 and g.last_turnover_reason == "AFTER_TOUCHDOWN", "端区3 蓝队进对方端区应达阵（score=%d）" % g.score_blue)
 
 	# 4 蓝队 15 → 10（自己端区）绝不能达阵
 	g.reset_match(); g.debug_setup("blue", 15.0, 2)
@@ -251,8 +251,84 @@ func _initialize() -> void:
 	_check(g.down_number == snap_down, "死球6 档数不该再变（%d vs %d）" % [snap_down, g.down_number])
 	_check(g.score_blue + g.score_red == snap_score, "死球6 比分不该再变")
 
+
+	# ================= Safety / 达阵重启 =================
+	# A 蓝队本方端区 4.9 被拔旗 → 红队 +2，红队从 55 开始
+	g.reset_match(); g.debug_setup("blue", 15.0, 2)
+	g.start_play(); g.end_play("SAFETY", 4.9)
+	_check(g.score_red == 2, "A 红队应 +2（实际 %d）" % g.score_red)
+	_check(g.possession_team == "red", "A 球权应归红队（实际 %s）" % g.possession_team)
+	_check(is_equal_approx(g.line_of_scrimmage, 55.0), "A 红队应从 55 开始（实际 %.1f）" % g.line_of_scrimmage)
+	_check(g.down_number == 1, "A 应为 1 档（实际 %d）" % g.down_number)
+
+	# B 红队本方端区 64.9 被拔旗 → 蓝队 +2，蓝队从 15 开始
+	g.reset_match(); g.debug_setup("red", 55.0, 1)
+	g.start_play(); g.end_play("SAFETY", 64.9)
+	_check(g.score_blue == 2, "B 蓝队应 +2（实际 %d）" % g.score_blue)
+	_check(g.possession_team == "blue", "B 球权应归蓝队")
+	_check(is_equal_approx(g.line_of_scrimmage, 15.0), "B 蓝队应从 15 开始（实际 %.1f）" % g.line_of_scrimmage)
+
+	# C 蓝队达阵 → 红队从 55 开始
+	g.reset_match(); g.debug_setup("blue", 58.0, 1)
+	g.start_play(); g.end_play("TOUCHDOWN", 62.0)
+	_check(g.score_blue == 6 and g.possession_team == "red", "C 蓝队 +6 并换红方")
+	_check(is_equal_approx(g.line_of_scrimmage, 55.0), "C 红队应从 55 开始（实际 %.1f）" % g.line_of_scrimmage)
+
+	# D 红队达阵 → 蓝队从 15 开始
+	g.reset_match(); g.debug_setup("red", 12.0, 1)
+	g.start_play(); g.end_play("TOUCHDOWN", 6.5)
+	_check(g.score_red == 6 and g.possession_team == "blue", "D 红队 +6 并换蓝方")
+	_check(is_equal_approx(g.line_of_scrimmage, 15.0), "D 蓝队应从 15 开始（实际 %.1f）" % g.line_of_scrimmage)
+
+	# E 截球回攻在蓝方端区被拔旗 → 不判 Safety、不 Touchback、保留位置
+	g.reset_match(); g.debug_setup("blue", 40.0, 1)
+	g.start_play(); g.end_play("INTERCEPTION", 40.0)
+	g.end_play("FLAG_PULL", 3.0)
+	_check(is_equal_approx(g.line_of_scrimmage, 3.0), "E 应保留 3.0（实际 %.1f）" % g.line_of_scrimmage)
+	_check(g.score_blue + g.score_red == 0, "E 不该有 Safety 得分（%d）" % (g.score_blue + g.score_red))
+	_check(g.possession_team == "red", "E 球权应归截球方红队（实际 %s）" % g.possession_team)
+
+	# F 截球回攻在红方端区被拔旗
+	g.reset_match(); g.debug_setup("red", 30.0, 1)
+	g.start_play(); g.end_play("INTERCEPTION", 30.0)
+	g.end_play("FLAG_PULL", 66.0)
+	_check(is_equal_approx(g.line_of_scrimmage, 66.0), "F 应保留 66.0（实际 %.1f）" % g.line_of_scrimmage)
+	_check(g.score_blue + g.score_red == 0, "F 不该有得分")
+
+	# G 端区外拔旗 → 不判 Safety
+	g.reset_match(); g.debug_setup("blue", 20.0, 1)
+	g.start_play(); g.end_play("FLAG_PULL", 25.0)
+	_check(g.score_blue + g.score_red == 0, "G 端区外拔旗不该得分")
+	_check(g.down_number == 2 and is_equal_approx(g.line_of_scrimmage, 25.0), "G 应正常进入 2 档、球在 25")
+
+
+	# ============ 码数统一 / 状态残留 / 端区边界 ============
+	g.reset_match()
+	_check(g.yards_to_go_from("blue", 16.0, 35.0) == 19, "码数1 蓝 16→35 应为 19（实际 %d）" % g.yards_to_go_from("blue", 16.0, 35.0))
+	_check(g.yards_to_go_from("blue", 11.8, 35.0) == 24, "码数2 蓝 11.8→35 应为 24（实际 %d）" % g.yards_to_go_from("blue", 11.8, 35.0))
+	_check(g.yards_to_go_from("red", 49.0, 35.0) == 14, "码数3 红 49→35 应为 14（实际 %d）" % g.yards_to_go_from("red", 49.0, 35.0))
+	_check(g.yards_to_go_from("red", 20.0, 10.0) == 10, "码数4 红 20→10 应为 10（实际 %d）" % g.yards_to_go_from("red", 20.0, 10.0))
+	_check(g.yards_to_go_from("red", 11.8, 10.0) == 2, "码数5 红 11.8→10 应为 2（实际 %d）" % g.yards_to_go_from("red", 11.8, 10.0))
+	_check(g.yards_to_go_from("blue", 35.0, 35.0) == 0, "码数6 蓝 35→35 应为 0（实际 %d）" % g.yards_to_go_from("blue", 35.0, 35.0))
+
+	# 状态残留：新档必须清空当前事件，但保留历史
+	g.reset_match(); g.debug_setup("blue", 15.0, 1)
+	g.start_play(); g.end_play("FLAG_PULL", 20.0)
+	_check(g.last_event == "", "残留1 新档 CURRENT EVENT 应清空（实际 '%s'）" % g.last_event)
+	_check(g.last_turnover_reason == "", "残留2 本系列没有换权时历史应为空（实际 '%s'）" % g.last_turnover_reason)
+	g.reset_match(); g.debug_setup("red", 55.0, 4)
+	g.start_play(); g.end_play("INCOMPLETE_PASS", 55.0)
+	_check(g.series_turnover_reason == "TURNOVER_ON_DOWNS", "残留3 换权后 SERIES START 应记录原因（实际 '%s'）" % g.series_turnover_reason)
+	_check(g.last_event == "", "残留4 换权后的新档当前事件仍应为空（实际 '%s'）" % g.last_event)
+
+	# 端区边界：不能在有效场地内被挪动
+	_check(is_equal_approx(g.field_yards_to_world(1.0), -9.0), "边界1 yards1 → z-9（实际 %.2f）" % g.field_yards_to_world(1.0))
+	_check(is_equal_approx(g.world_to_field_yards(-9.0), 1.0), "边界2 z-9 → yards1（实际 %.2f）" % g.world_to_field_yards(-9.0))
+	_check(is_equal_approx(g.field_yards_to_world(69.0), 59.0), "边界3 yards69 → z59（实际 %.2f）" % g.field_yards_to_world(69.0))
+	_check(is_equal_approx(g.field_yards_to_world(2.0), -8.0), "边界4 yards2 → z-8（实际 %.2f）" % g.field_yards_to_world(2.0))
+
 	if fails.is_empty():
-		print("[test_lifecycle] OK  生命周期 + 回攻 + P0 达阵 + 端区反例 共 50 项通过")
+		print("[test_lifecycle] OK  生命周期+回攻+达阵+端区+Safety+码数/状态/边界 共 80 项通过")
 		quit(0)
 	else:
 		for m in fails:

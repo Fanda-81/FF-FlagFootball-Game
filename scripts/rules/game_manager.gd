@@ -30,7 +30,8 @@ var down_number := 1
 var score_blue := 0
 var score_red := 0
 var last_event := ""
-var last_turnover_reason := ""
+var last_turnover_reason := ""          ## 历史：最近一次换权原因
+var series_turnover_reason := ""        ## 当前系列是由哪种换权开创的
 var play_id := 0
 var phase := 1
 var play_already_ended := false
@@ -67,8 +68,17 @@ func get_defense_team() -> String:
 	return "red" if possession_team == "blue" else "blue"
 
 
+## 统一的"还差多少码"计算（HUD / 调试 / 规则判断必须共用这一个）
+func yards_to_go_from(team: String, ball_yards: float, target_yards: float) -> int:
+	var direction := 1.0 if team == "blue" else -1.0
+	var distance := (target_yards - ball_yards) * direction
+	if distance <= 0.001:
+		return 0
+	return int(ceil(distance - 0.001))
+
+
 func get_yards_to_go() -> int:
-	return int(maxf(1.0, ceilf((first_down_line - line_of_scrimmage) * get_attacking_direction())))
+	return yards_to_go_from(possession_team, line_of_scrimmage, first_down_line)
 
 
 func target_line_for(team: String, yards: float) -> float:
@@ -116,6 +126,8 @@ func start_match() -> void:
 func begin_down() -> void:
 	play_id += 1
 	play_already_ended = false
+	# 当前档事件清空；换权原因只作为历史保留（不再冒充当前状态）
+	last_event = ""
 	awaiting_return = false
 	play_started_at = Time.get_ticks_msec() / 1000.0
 	match_state = State.READY_TO_SNAP
@@ -270,15 +282,26 @@ func process_interception() -> void:
 	_log("[PLAY %03d] INTERCEPTION — %s RETURN IN PROGRESS" % [play_id, possession_team.to_upper()])
 
 
+## 安全分：防守方 +2，并由得分方从自己 5 码线开始下一次进攻
 func process_safety() -> void:
 	last_event = "SAFETY"
-	if possession_team == "blue":
-		score_red += safety_points
-	else:
+	var scorer := get_defense_team()
+	if scorer == "blue":
 		score_blue += safety_points
-	_log("[PLAY %03d] SAFETY (+%d)" % [play_id, safety_points])
-	change_possession("SAFETY", line_of_scrimmage)
-
+	else:
+		score_red += safety_points
+	_log("[PLAY %03d] SAFETY (+%d) — %s SCORES" % [play_id, safety_points, scorer.to_upper()])
+	possession_team = scorer
+	var start_yards := 15.0 if scorer == "blue" else 55.0
+	ball_position_yards = start_yards
+	line_of_scrimmage = start_yards
+	down_number = 1
+	phase = 1
+	first_down_line = MIDFIELD
+	last_turnover_reason = "SAFETY"
+	series_turnover_reason = "SAFETY"
+	_archive(play_id, "SAFETY", start_yards)
+	begin_down()
 
 func process_touchdown() -> bool:
 	if not is_opponent_endzone(possession_team, ball_position_yards):
@@ -309,6 +332,7 @@ func _after_score(scorer: String) -> void:
 	phase = 1
 	first_down_line = MIDFIELD
 	last_turnover_reason = "AFTER_TOUCHDOWN"
+	series_turnover_reason = "AFTER_TOUCHDOWN"
 	_log("[PLAY %03d] RESTART — %s FROM OWN 5 (%.1f)" % [play_id, receiver.to_upper(), start_yards])
 	_archive(play_id, "TOUCHDOWN", start_yards)
 	begin_down()
@@ -363,6 +387,7 @@ func finish_return(final_yards: float) -> void:
 func change_possession(reason: String, turnover_yards: float) -> void:
 	possession_team = get_defense_team()
 	last_turnover_reason = reason
+	series_turnover_reason = reason
 	down_number = 1
 	ball_position_yards = clampf(turnover_yards, 0.0, FIELD_LENGTH)
 	line_of_scrimmage = ball_position_yards
@@ -396,6 +421,7 @@ func debug_lines() -> String:
 		"DOWN: %d   YARDS TO GO: %d" % [down_number, get_yards_to_go()],
 		"BALL: %.1f   LOS: %.1f   FIRST DOWN: %.1f" % [ball_position_yards, line_of_scrimmage, first_down_line],
 		"DIRECTION: " + ("+" if get_attacking_direction() > 0.0 else "-"),
-		"LAST EVENT: " + last_event,
-		"TURNOVER: " + last_turnover_reason,
+		"CURRENT EVENT: " + ("—" if last_event == "" else last_event),
+		"SERIES START: " + ("—" if series_turnover_reason == "" else series_turnover_reason),
+		"TURNOVER HISTORY: " + ("—" if last_turnover_reason == "" else last_turnover_reason),
 	]))
