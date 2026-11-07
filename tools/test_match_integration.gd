@@ -207,8 +207,53 @@ func _initialize() -> void:
 	_check(g.possession_team == "red", "I 达阵后应换红方（实际 %s）" % g.possession_team)
 	_check(is_equal_approx(g.line_of_scrimmage, 55.0), "I 红方应在本方 5 码线 55（实际 %.1f）" % g.line_of_scrimmage)
 
+
+	# ============ 端区反例（PLAY 011 回归）============
+	g.reset_match()
+	# 1 红队 55 → 7.8（对方端区）允许达阵
+	g.debug_setup("red", 55.0, 1)
+	g.start_play(); g.end_play("FLAG_PULL", 7.8)
+	_check(g.score_red == 6 and g.last_event == "TOUCHDOWN", "端区1 红队进对方端区应达阵（score=%d）" % g.score_red)
+
+	# 2 红队 55 → 60（自己端区）绝不能达阵
+	g.reset_match(); g.debug_setup("red", 55.0, 4)
+	g.start_play(); g.end_play("TOUCHDOWN", 60.0)
+	_check(g.score_red == 0, "端区2 红队到自己端区绝不该得分（%d）" % g.score_red)
+	_check(g.score_blue == 0, "端区2 蓝队也不该得分（%d）" % g.score_blue)
+
+	# 3 蓝队 15 → 60.1（对方端区）允许达阵
+	g.reset_match(); g.debug_setup("blue", 15.0, 1)
+	g.start_play(); g.end_play("FLAG_PULL", 60.1)
+	_check(g.score_blue == 6 and g.last_event == "TOUCHDOWN", "端区3 蓝队进对方端区应达阵（score=%d）" % g.score_blue)
+
+	# 4 蓝队 15 → 10（自己端区）绝不能达阵
+	g.reset_match(); g.debug_setup("blue", 15.0, 2)
+	g.start_play(); g.end_play("TOUCHDOWN", 10.0)
+	_check(g.score_blue == 0 and g.score_red == 0, "端区4 蓝队到自己端区绝不该得分")
+
+	# 5 镜像对称：把 2 和 4 的球位互换，结果应互换
+	g.reset_match(); g.debug_setup("red", 50.0, 1)
+	g.start_play(); g.end_play("FLAG_PULL", 65.0)
+	_check(g.score_red == 0, "端区5 红队跑向自己端区 65 不该得分")
+	g.reset_match(); g.debug_setup("blue", 20.0, 1)
+	g.start_play(); g.end_play("FLAG_PULL", 5.0)
+	_check(g.score_blue == 0, "端区5 蓝队跑向自己端区 5 不该得分")
+
+	# 6 死球后重复提交：状态、比分、档数都不变
+	g.reset_match(); g.debug_setup("blue", 20.0, 1)
+	g.start_play(); g.end_play("FLAG_PULL", 25.0)
+	var snap_state = g.match_state
+	var snap_down: int = g.down_number
+	var snap_score: int = g.score_blue + g.score_red
+	g.start_play()
+	g.end_play("FLAG_PULL", 30.0)
+	g.end_play("INCOMPLETE_PASS", 30.0)
+	g.end_play("TOUCHDOWN", 30.0)
+	_check(g.down_number == snap_down, "死球6 档数不该再变（%d vs %d）" % [snap_down, g.down_number])
+	_check(g.score_blue + g.score_red == snap_score, "死球6 比分不该再变")
+
 	if fails.is_empty():
-		print("[test_lifecycle] OK  A~L + 回攻 A~E + P0 达阵 A~I 共 42 项通过")
+		print("[test_lifecycle] OK  生命周期 + 回攻 + P0 达阵 + 端区反例 共 50 项通过")
 		quit(0)
 	else:
 		for m in fails:

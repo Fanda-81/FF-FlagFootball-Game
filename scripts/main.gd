@@ -659,6 +659,9 @@ func _begin_snap() -> void:
 	_phase = Phase.SNAP
 	_snap_elapsed = 0.0
 	if _game != null:
+		# 死球/结果阶段不允许开球，防止死球后重复提交事件
+		if _game.match_state != GameManager.State.READY_TO_SNAP:
+			return
 		_game.start_play()
 	_holder = _center
 	_qb_snap_origin = _qb.global_position
@@ -1004,7 +1007,8 @@ func _advance_return(delta: float) -> void:
 
 	# 防守方达阵（进攻方那一侧端区）
 	var return_yards := _game.world_to_field_yards(_carrier.global_position.z)
-	var return_team := _game.get_defense_team()
+	# 截球后引擎已把球权给回攻方，达阵判定必须用当前持球方
+	var return_team := _game.possession_team
 	if not _td_celebrating and _game.is_opponent_endzone(return_team, return_yards):
 		_touchdowns += 1
 		# 防守方（非当前进攻方）得分
@@ -1158,6 +1162,11 @@ func _trigger_touchdown() -> void:
 
 
 func _end_down(spot: float, reason: String) -> void:
+	# 本档已经结束（引擎已锁定）→ 不再提交任何本档事件
+	if _game != null and _game.play_already_ended:
+		return
+	if _game != null and _game.match_state not in [GameManager.State.BALL_IN_PLAY, GameManager.State.PASS_IN_AIR, GameManager.State.RETURN_IN_PROGRESS]:
+		return
 	if _phase == Phase.RESULT or _phase == Phase.TOUCHDOWN:
 		return
 	_show_result(reason)
