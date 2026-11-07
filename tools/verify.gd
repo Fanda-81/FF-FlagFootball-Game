@@ -651,7 +651,7 @@ func _check_throw_loop() -> void:
 	if attempts < 1:
 		_failures.append("传球没有被判定：attempts=%d" % attempts)
 	var phase := int(_main.get("_phase"))
-	if phase != 0:
+	if phase != 0 and phase != 7:
 		_failures.append("传球结束后没有复位到持球状态：phase=%d" % phase)
 	if _main.get("_holder") == null:
 		_failures.append("复位后没有持球人")

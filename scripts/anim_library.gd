@@ -20,6 +20,8 @@ const CLIPS := {
 	"run": {"file": "RunClip.glb", "retarget": true},
 	# 中锋开球动作（Center Snap.fbx）
 	"snap": {"file": "CenterSnap.glb", "retarget": true},
+	# 列阵慢跑（Standard Run.fbx）
+	"jog": {"file": "JogRun.glb", "retarget": true},
 }
 
 

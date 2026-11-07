@@ -19,7 +19,7 @@ const ACTOR_SCENE := preload("res://scenes/player_actor.tscn")
 const FOOTBALL_SCENE := preload("res://scenes/football.tscn")
 const PASS_TUNING := preload("res://scripts/pass_tuning.gd")
 
-enum Phase { PRE_SNAP, SNAP, PLAY, FLIGHT, RUN, RESULT, TOUCHDOWN }
+enum Phase { PRE_SNAP, SNAP, PLAY, FLIGHT, RUN, RESULT, TOUCHDOWN, LINEUP }
 enum ThrowMode { FLAT, HIGH, ABORT }
 enum CatchBand { LOW, CHEST, HIGH }
 
@@ -104,6 +104,10 @@ var _swapped := false
 ## 进攻方向：+1 = 朝 +Z，-1 = 朝 -Z
 var _attack_dir := 1
 var _pending_swap := false
+## 列阵：目标位置 + 计时
+var _lineup_targets: Dictionary = {}
+var _lineup_timer := 0.0
+var _series_count := 0
 var _td_celebrating := false
 var _td_timer := 0.0
 var _play_buttons: Dictionary = {}
@@ -431,7 +435,13 @@ func _begin_series(los: float, down: int) -> void:
 			spot_x = float(custom["x"])
 			spot_dz = float(custom["dz"])
 		spot_x = clampf(spot_x, FIELD_MIN_X + 1.0, FIELD_MAX_X - 1.0)
-		actor.global_position = Vector3(spot_x * _attack_dir, 0.0, _los_z + spot_dz * _attack_dir)
+		var target := Vector3(spot_x * _attack_dir, 0.0, _los_z + spot_dz * _attack_dir)
+		_lineup_targets[slot] = target
+		if _series_count == 0:
+			actor.global_position = target
+		else:
+			# 慢跑列阵
+			actor.play_one_shot("jog", 2.5)
 		actor.velocity = Vector3.ZERO
 		actor.set_move_input(Vector3.ZERO)
 		actor.rotation.y = 0.0 if String(spec["side"]) == "offense" else PI
@@ -464,7 +474,9 @@ func _begin_series(los: float, down: int) -> void:
 	_trail.visible = false
 	_set_holder(_center)
 	_attach_ball(_center)
-	_phase = Phase.PRE_SNAP
+	_series_count += 1
+	_lineup_timer = 2.5
+	_phase = Phase.PRE_SNAP if _series_count <= 1 else Phase.LINEUP
 	_refresh_route_preview()
 	_play_clock = PRE_SNAP_CLOCK
 	_clock_running = true
@@ -889,6 +901,31 @@ func _advance_return(delta: float) -> void:
 		_phase = Phase.RESULT
 		_result_timer = RESULT_HOLD_SECONDS
 		_defense_possession = false
+
+
+## 列阵过渡：球员慢跑到各自位置
+func _advance_lineup(delta: float) -> void:
+	_lineup_timer -= delta
+	var all_arrived := true
+	for slot in _lineup_targets:
+		var actor: PlayerActor = _actors[slot]
+		var target: Vector3 = _lineup_targets[slot]
+		var to_target := target - actor.global_position
+		to_target.y = 0.0
+		if to_target.length() > 0.6:
+			actor.set_move_input(to_target.normalized())
+			all_arrived = false
+		else:
+			actor.set_move_input(Vector3.ZERO)
+	if _center != null:
+		_attach_ball(_center)
+	if all_arrived or _lineup_timer <= 0.0:
+		for slot in _lineup_targets:
+			var actor: PlayerActor = _actors[slot]
+			actor.global_position = _lineup_targets[slot]
+			actor.set_move_input(Vector3.ZERO)
+		_phase = Phase.PRE_SNAP
+		_refresh_hud()
 
 func _advance_run(delta: float) -> void:
 	if _carrier == null:
@@ -1493,6 +1530,8 @@ func _physics_process(delta: float) -> void:
 			if bool(_ball.get("landed")) and not _physics_started:
 				_physics_started = true
 				_start_bounce()
+		Phase.LINEUP:
+			_advance_lineup(delta)
 		Phase.RUN:
 			if _defense_possession:
 				_advance_return(delta)
