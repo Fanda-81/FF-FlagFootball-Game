@@ -1821,17 +1821,38 @@ func _advance_receivers() -> void:
 
 
 ## 防守球员不许越过启球线（z 不能小于启球线）
+## 防守方合法一侧的启球线位置（永远在进攻方的对面）
+func defender_los_z() -> float:
+	return _los_z + 0.15 if _attack_dir > 0 else _los_z - 0.15
+
+
+## 防守方是否还在合法一侧
+func defender_on_side(z: float) -> bool:
+	return z >= defender_los_z() - 0.001 if _attack_dir > 0 else z <= defender_los_z() + 0.001
+
+
 func _clamp_defenders() -> void:
-	# 抄截后防守方持球回攻，允许越过启球线
+	# 截球回攻时不限制
 	if _defense_possession:
 		return
+	# 开球后允许正常追球/盯人，只在开球前约束
+	if _phase != Phase.PRE_SNAP and _phase != Phase.LINEUP:
+		return
+	var line := defender_los_z()
 	for defender in _defenders:
-		if defender.global_position.z < _los_z + 0.15:
-			defender.global_position.z = _los_z + 0.15
-
+		if _attack_dir > 0:
+			if defender.global_position.z < line:
+				defender.global_position.z = line
+		else:
+			if defender.global_position.z > line:
+				defender.global_position.z = line
 
 func _advance_coverage() -> void:
 	for defender in _defenders:
+		# 开球前防守方不许移动（从输入源头阻止越线，而不是事后拉回）
+		if _phase == Phase.PRE_SNAP or _phase == Phase.LINEUP:
+			defender.set_move_input(Vector3.ZERO)
+			continue
 		var mark: PlayerActor = null
 		if _carrier != null:
 			mark = _carrier
