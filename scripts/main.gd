@@ -1143,14 +1143,18 @@ func _apply_keyboard_move() -> void:
 	if _phase != Phase.PLAY and _phase != Phase.RUN and _phase != Phase.FLIGHT:
 		return
 	var dir := Vector3.ZERO
+	# 屏幕方向映射：俯视机位 screen-right = -X、screen-up = +Z；
+	# 攻防转换 180° 翻转后两者都反向
+	var right := -1.0 if not _swapped else 1.0
+	var up := 1.0 if not _swapped else -1.0
 	if Input.is_key_pressed(KEY_A):
-		dir.x -= 1.0
+		dir.x -= right
 	if Input.is_key_pressed(KEY_D):
-		dir.x += 1.0
+		dir.x += right
 	if Input.is_key_pressed(KEY_W):
-		dir.z += 1.0
+		dir.z += up
 	if Input.is_key_pressed(KEY_S):
-		dir.z -= 1.0
+		dir.z -= up
 	if dir == Vector3.ZERO:
 		return
 	dir = dir.normalized()
@@ -1484,6 +1488,16 @@ func _build_hud() -> void:
 		_play_grid.add_child(play_button)
 		_play_buttons[String(play["id"])] = play_button
 	_refresh_play_buttons()
+	# 战术板按钮移到档数面板下方，给左下角摇杆让位（滑开方式不变）
+	if _play_tab != null:
+		_play_tab.anchor_left = 0.0
+		_play_tab.anchor_right = 0.0
+		_play_tab.anchor_top = 0.0
+		_play_tab.anchor_bottom = 0.0
+		_play_tab.offset_left = MARGIN
+		_play_tab.offset_right = MARGIN + 120.0
+		_play_tab.offset_top = MARGIN + 188.0
+		_play_tab.offset_bottom = MARGIN + 284.0
 
 	_aim_chip = Label.new()
 	_aim_chip.name = "AimChip"
