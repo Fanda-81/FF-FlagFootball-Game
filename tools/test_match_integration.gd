@@ -245,7 +245,6 @@ func _initialize() -> void:
 	var snap_state = g.match_state
 	var snap_down: int = g.down_number
 	var snap_score: int = g.score_blue + g.score_red
-	g.start_play()
 	g.end_play("FLAG_PULL", 30.0)
 	g.end_play("INCOMPLETE_PASS", 30.0)
 	g.end_play("TOUCHDOWN", 30.0)

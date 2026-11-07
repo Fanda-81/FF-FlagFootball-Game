@@ -316,15 +316,15 @@ func _after_score(scorer: String) -> void:
 
 func _advance_down() -> void:
 	var direction := get_attacking_direction()
+	# 只要真正进入对方端区，无论第几阶段都先判达阵
+	if is_opponent_endzone(possession_team, ball_position_yards):
+		if process_touchdown():
+			return
 	if phase == 1:
 		# 第一阶段：目标线是中场，到达即新首攻
 		var reached := (ball_position_yards - first_down_line) * direction >= -0.01
 		if reached:
 			award_first_down()
-			return
-	elif is_opponent_endzone(possession_team, ball_position_yards):
-		# 第二阶段：目标线是达阵线，只有球真正进入对方端区才达阵
-		if process_touchdown():
 			return
 	# 其它情况一律按死球正常推进档数（phase 2 绝不 award_first_down）
 	down_number += 1
