@@ -18,6 +18,8 @@ const CLIPS := {
 	"defeat": {"file": "Defeated.glb", "retarget": true},
 	# 跑步循环（111111.glb，自带根位移，重定时会剥掉）
 	"run": {"file": "RunClip.glb", "retarget": true},
+	# 中锋开球动作（Center Snap.fbx）
+	"snap": {"file": "CenterSnap.glb", "retarget": true},
 }
 
 

@@ -418,6 +418,9 @@ func _on_snap_pressed() -> void:
 
 
 func _begin_snap() -> void:
+	# 中锋背对四分卫做开球动作（0.5 秒窗口内播完）
+	if _center != null:
+		_center.play_one_shot("snap", SNAP_SECONDS)
 	_clear_route_preview()
 	# 开球时把上一档被拔掉的腰旗恢复
 	for slot in _actors:
@@ -1494,6 +1497,9 @@ func _advance_receivers() -> void:
 
 ## 防守球员不许越过启球线（z 不能小于启球线）
 func _clamp_defenders() -> void:
+	# 抄截后防守方持球回攻，允许越过启球线
+	if _defense_possession:
+		return
 	for defender in _defenders:
 		if defender.global_position.z < _los_z + 0.15:
 			defender.global_position.z = _los_z + 0.15
