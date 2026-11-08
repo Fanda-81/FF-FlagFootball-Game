@@ -67,6 +67,13 @@
 - WASD 为屏幕方向；持球人可边移动边传球（非跑球战术下球一直在 QB 手上）
 - 跑球战术：开球后 0.7 秒自动交球给跑锋（Y 槽位）
 
-## 10. 未实现
-- 犯规与罚码（False Start / Offside 等）
+## 10. 犯规与罚码
+- 配置集中在 `scripts/rules/penalty_config.gd`：概率 / 码数 / 是否重打本档
+- 统一入口 `GameManager.apply_penalty(id, offending_team)`
+- 方向由**进攻方**决定（不是犯规方）：进攻犯→退，防守犯→推进
+- 罚码后夹在 0–70 码内
+- 触发点：开球瞬间判 `false_start` / `offside`（事件触发，非每帧随机）
+- 测试时可 `PenaltyConfig.enabled = false` 关闭随机
+
+## 11. 未实现
 - Huddle 战术选择界面（当前为直接列阵）

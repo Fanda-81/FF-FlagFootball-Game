@@ -75,6 +75,7 @@ var _qb_ready := false
 
 
 func _initialize() -> void:
+	PenaltyConfig.enabled = false   # 测试里关闭随机犯规，保证可复现
 	root.size = Vector2i(720, 1280)
 
 	var packed: PackedScene = load("res://scenes/stadium.tscn")

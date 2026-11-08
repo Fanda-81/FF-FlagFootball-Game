@@ -371,6 +371,33 @@ func _after_score(scorer: String) -> void:
 	begin_down()
 
 
+## 犯规统一入口：罚码 + 是否重打本档，全部集中在这里
+func apply_penalty(penalty_id: String, offending_team: String) -> bool:
+	var cfg := PenaltyConfig.config(penalty_id)
+	if cfg.is_empty():
+		return false
+	var yards := float(cfg.get("yards", 5))
+	# 方向取决于"哪一方在进攻"，不是犯规方
+	var forward := 1.0 if possession_team == "blue" else -1.0
+	if String(cfg.get("side", "offense")) == "offense":
+		line_of_scrimmage -= yards * forward   # 进攻方犯规：往本方端区退
+	else:
+		line_of_scrimmage += yards * forward   # 防守方犯规：往对方端区推进
+	line_of_scrimmage = clampf(line_of_scrimmage, 0.0, FIELD_LENGTH)
+	ball_position_yards = line_of_scrimmage
+	if not bool(cfg.get("replay_down", true)):
+		down_number = mini(down_number + 1, downs_total)
+	first_down_line = target_line_for(possession_team, line_of_scrimmage)
+	phase = 1 if is_equal_approx(first_down_line, MIDFIELD) else 2
+	last_event = "PENALTY_" + penalty_id.to_upper()
+	_log("[PLAY %03d] PENALTY %s ON %s — LOS NOW %.1f%s" % [
+		play_id, String(cfg.get("name", penalty_id)), offending_team.to_upper(), line_of_scrimmage,
+		"" if bool(cfg.get("replay_down", true)) else " (DOWN LOST)"])
+	_archive(play_id, "PENALTY", line_of_scrimmage)
+	begin_down()
+	return true
+
+
 func _advance_down() -> void:
 	# 附加分没打成 → 不加分，直接进入重新开球
 	if extra_point_pending:

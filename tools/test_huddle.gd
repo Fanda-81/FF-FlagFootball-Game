@@ -10,6 +10,7 @@ var checked_ready := false
 var checked_snap := false
 
 func _initialize() -> void:
+	PenaltyConfig.enabled = false   # 测试里关闭随机犯规，保证可复现
 	main = (load("res://scenes/main.tscn") as PackedScene).instantiate()
 	root.add_child(main)
 

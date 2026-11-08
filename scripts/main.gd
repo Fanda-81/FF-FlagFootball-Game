@@ -797,6 +797,18 @@ func _begin_snap() -> void:
 		_snap_button.text = "躲旗"
 	_phase = Phase.SNAP
 	_snap_elapsed = 0.0
+	# 开球瞬间判定犯规（事件触发，带概率，可在 PenaltyConfig 关闭）
+	if PenaltyConfig.roll("false_start"):
+		_game.apply_penalty("false_start", _offense_side)
+		_phase = Phase.PRE_SNAP
+		_show_toast("早动：罚 5 码，重打本档", Color("ff8a65"))
+		return
+	if PenaltyConfig.roll("offside"):
+		var defense_team := "red" if _offense_side == "blue" else "blue"
+		_game.apply_penalty("offside", defense_team)
+		_phase = Phase.PRE_SNAP
+		_show_toast("防守越线：罚 5 码", Color("ff8a65"))
+		return
 	if _game != null:
 		_game.start_play()
 	_holder = _center
