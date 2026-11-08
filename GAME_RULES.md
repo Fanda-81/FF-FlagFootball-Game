@@ -72,6 +72,7 @@
 - 统一入口 `GameManager.apply_penalty(id, offending_team)`
 - 方向由**进攻方**决定（不是犯规方）：进攻犯→退，防守犯→推进
 - 罚码后夹在 0–70 码内
+- **减半规则**：起球线距本方端区 ≤5 码时，进攻方罚码减半（5→2.5→1.25 …），离开 5 码线后恢复全额
 - 触发点：开球瞬间判 `false_start` / `offside`（事件触发，非每帧随机）
 - 测试时可 `PenaltyConfig.enabled = false` 关闭随机
 

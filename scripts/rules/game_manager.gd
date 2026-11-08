@@ -379,10 +379,16 @@ func apply_penalty(penalty_id: String, offending_team: String) -> bool:
 	var yards := float(cfg.get("yards", 5))
 	# 方向取决于"哪一方在进攻"，不是犯规方
 	var forward := 1.0 if possession_team == "blue" else -1.0
+	var applied := yards
 	if String(cfg.get("side", "offense")) == "offense":
-		line_of_scrimmage -= yards * forward   # 进攻方犯规：往本方端区退
+		# 距离本方端区不足罚码时，按"减半规则"处理（5 → 2.5 → 1.25 ...）
+		var own_goal := BLUE_GOAL if possession_team == "blue" else RED_GOAL
+		var to_goal := (line_of_scrimmage - own_goal) * forward
+		if to_goal <= 5.0:
+			applied = minf(yards, to_goal * 0.5)
+		line_of_scrimmage -= applied * forward   # 进攻方犯规：往本方端区退
 	else:
-		line_of_scrimmage += yards * forward   # 防守方犯规：往对方端区推进
+		line_of_scrimmage += yards * forward     # 防守方犯规：往对方端区推进
 	line_of_scrimmage = clampf(line_of_scrimmage, 0.0, FIELD_LENGTH)
 	ball_position_yards = line_of_scrimmage
 	if not bool(cfg.get("replay_down", true)):
